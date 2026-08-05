@@ -3,7 +3,8 @@ import path from "node:path";
 import os from "node:os";
 import fs from "node:fs/promises";
 import { z } from "zod";
-import { bundle, renderMedia, selectComposition } from "@remotion/renderer";
+import { bundle } from "@remotion/bundler";
+import { renderMedia, selectComposition } from "@remotion/renderer";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { getSupabaseAdmin, AD_PROJECTS_TABLE, AD_STUDIO_BUCKET } from "@/lib/ad-studio-supabase";
 import { ASPECT_RATIOS, AspectRatio } from "@/lib/ad-studio-types";
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
       codec: "h264",
       outputLocation,
       inputProps,
-      ffmpegExecutable: ffmpegInstaller.path
+      binariesDirectory: path.dirname(ffmpegInstaller.path)
     });
 
     const fileBuffer = await fs.readFile(outputLocation);

@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { ComponentType, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import AppShell from "@/components/AppShell";
@@ -770,7 +770,7 @@ function WizardInner() {
           <div style={{ maxWidth: 360, margin: "0 auto" }}>
             {scenes.length > 0 && (
               <Player
-                component={AdComposition}
+                component={AdComposition as unknown as ComponentType<Record<string, unknown>>}
                 inputProps={{ product, scenes, brandKit }}
                 durationInFrames={Math.max(30, Math.round(totalDuration * 30))}
                 fps={30}

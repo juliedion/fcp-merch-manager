@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CONCEPT_TYPES } from "./ad-studio-types";
 
 export const adProductSnapshotSchema = z.object({
   source: z.enum(["shopify", "mavely"]),
@@ -23,7 +24,7 @@ export const adProductSnapshotSchema = z.object({
 
 export const adConceptSchema = z.object({
   id: z.string(),
-  conceptType: z.string(),
+  conceptType: z.enum(CONCEPT_TYPES),
   title: z.string(),
   targetAudience: z.string(),
   coreProblem: z.string(),
