@@ -153,6 +153,9 @@ export default function MavelyDashboard() {
                           <Link className="secondary" href={`/mavely/${row.id}/edit`}>
                             Edit
                           </Link>
+                          <Link className="secondary" href={`/ad-studio/new?mavelyId=${row.id}`}>
+                            Create Ad
+                          </Link>
                           {row.shopify_storefront_url && (
                             <a className="secondary" href={row.shopify_storefront_url} target="_blank" rel="noopener noreferrer">
                               Preview
