@@ -1,0 +1,24 @@
+{%- comment -%}
+  Include from the theme's product-card snippet (commonly snippets/card-product.liquid
+  or snippets/product-card.liquid depending on the theme) in place of the normal
+  Add to Cart / Quick Add control, when the card's product is an affiliate product.
+
+  The card's image and title should keep linking to the FCP product page
+  (product.url) — do NOT point card links directly at the Mavely link. Only this
+  bottom action control changes.
+
+  Usage:
+    {% assign is_affiliate = card_product.metafields.custom.affiliate_product.value %}
+    {% if is_affiliate %}
+      {% render 'affiliate-product-card-overrides', product: card_product %}
+    {% else %}
+      ... existing quick-add / add-to-cart control ...
+    {% endif %}
+{%- endcomment -%}
+
+<a
+  href="{{ product.url }}"
+  class="button button--secondary affiliate-card-button"
+>
+  {{ product.metafields.custom.external_button_label.value | default: 'View Product' }}
+</a>

@@ -1,0 +1,9 @@
+{%- comment -%}
+  Affiliate disclosure text. Text is editable via a theme setting (see settings_schema.json
+  addition in theme/README.md) so it can be changed without a code deploy. Falls back to
+  the default disclosure copy if the setting is blank.
+{%- endcomment -%}
+
+<p class="affiliate-disclosure">
+  {{ settings.affiliate_disclosure_text | default: "Fort Crazypants may earn a commission when you purchase through links on this page, at no additional cost to you. Prices and availability are determined by the retailer and may change." }}
+</p>
