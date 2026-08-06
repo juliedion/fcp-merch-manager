@@ -9,4 +9,3 @@ build/
 *.log
 npm-debug.log*
 .vercel
-*.tsbuildinfo

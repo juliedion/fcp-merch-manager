@@ -1,6 +1,5 @@
 export type ProductInput = {
   url: string;
-  mavelyLink: string;
   name: string;
   cost: number;
   price: number;

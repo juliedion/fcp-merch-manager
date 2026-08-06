@@ -1,187 +1,22 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { GeneratedProduct, ProductInput } from "@/lib/types";
 
-const initial: ProductInput = {
-  url: "",
-  mavelyLink: "",
-  name: "ONELUX 3-Tier Acrylic Utility Rolling Cart",
-  cost: 36,
-  price: 69.99,
-  category: "Home Organization",
-  audience: "busy families and small-space organizers",
-  problem: "cluttered counters and supplies with no convenient home",
-  features: "clear acrylic shelves, smooth rolling wheels, three storage tiers, compact footprint, multipurpose design",
-  shippingDays: 7,
-  competition: "medium",
-  demoFactor: 8
+const initial: ProductInput = { url:"", name:"ONELUX 3-Tier Acrylic Utility Rolling Cart", cost:36, price:69.99, category:"Home Organization", audience:"busy families and small-space organizers", problem:"cluttered counters and supplies with no convenient home", features:"clear acrylic shelves, smooth rolling wheels, three storage tiers, compact footprint, multipurpose design", shippingDays:7, competition:"medium", demoFactor:8 };
+const views: Record<string, (p: GeneratedProduct)=>string> = {
+  Listing: p => `${p.title}\n\n${p.bullets.map(x=>`• ${x}`).join("\n")}\n\nSEO title: ${p.seoTitle}\nMeta: ${p.metaDescription}\nTags: ${p.tags.join(", ")}`,
+  Instagram: p => p.instagramCaption, Pinterest: p => `${p.pinterestTitle}\n\n${p.pinterestDescription}`, Reel: p => p.reelScript,
+  Email: p => `${p.emailSubject}\n\n${p.emailBody}`, Blog: p => `${p.blogTitle}\n\n${p.blogBody}`
 };
-
-type ImportedProduct = {
-  finalUrl?: string;
-  title?: string;
-  description?: string;
-  image?: string;
-  price?: number;
-  category?: string;
-  audience?: string;
-  problem?: string;
-  features?: string[];
-  suggestedPrice?: number;
-  warning?: string;
-};
-
-const views: Record<string, (p: GeneratedProduct) => string> = {
-  Listing: p => `${p.title}\n\n${p.bullets.map(x => `• ${x}`).join("\n")}\n\nSEO title: ${p.seoTitle}\nMeta: ${p.metaDescription}\nTags: ${p.tags.join(", ")}`,
-  Instagram: p => p.instagramCaption,
-  Pinterest: p => `${p.pinterestTitle}\n\n${p.pinterestDescription}`,
-  Reel: p => p.reelScript,
-  Email: p => `${p.emailSubject}\n\n${p.emailBody}`,
-  Blog: p => `${p.blogTitle}\n\n${p.blogBody}`
-};
-
-export default function ProductStudio() {
-  const [form, setForm] = useState(initial);
-  const [result, setResult] = useState<GeneratedProduct | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [tab, setTab] = useState("Listing");
-  const [message, setMessage] = useState("");
-  const [image, setImage] = useState("");
-  const output = useMemo(() => result ? views[tab](result) : "", [result, tab]);
-  const change = (key: keyof ProductInput, value: string | number) => setForm(f => ({ ...f, [key]: value }));
-
-  async function importProduct() {
-    if (!form.url.trim()) {
-      setMessage("Paste a product or affiliate link first.");
-      return;
-    }
-    setImporting(true);
-    setMessage("Following the link and reading product details…");
-    try {
-      const r = await fetch("/api/import-product", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: form.url })
-      });
-      const d: ImportedProduct & { error?: string } = await r.json();
-      if (!r.ok) throw new Error(d.error || "Could not import this product.");
-      setForm(f => ({
-        ...f,
-        url: d.finalUrl || f.url,
-        name: d.title || f.name,
-        price: d.price || d.suggestedPrice || f.price,
-        category: d.category || f.category,
-        audience: d.audience || f.audience,
-        problem: d.problem || f.problem,
-features: Array.isArray(d.features)
-  ? d.features.join(", ")
-  : typeof d.features === "string" && d.features.trim()
-    ? d.features
-    : f.features      }));
-      setImage(d.image || "");
-      setMessage(d.warning || "Product details imported. Review them, then generate the product package.");
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Import failed. You can still enter the details manually.");
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  async function generate() {
-    setLoading(true);
-    setMessage("");
-    try {
-      const r = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form)
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      setResult(d);
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Generation failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function save() {
-    if (!result) return;
-    const existing = JSON.parse(localStorage.getItem("fort-products") || "[]");
-    localStorage.setItem("fort-products", JSON.stringify([result, ...existing.filter((x: GeneratedProduct) => x.id !== result.id)]));
-    setMessage("Saved to your product library.");
-  }
-
-  async function publish() {
-    if (!result) return;
-    setMessage("Publishing draft…");
-    const r = await fetch("/api/shopify/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(result)
-    });
-    const d = await r.json();
-    setMessage(r.ok ? `Draft created in Shopify: ${d.title}` : `Not published: ${typeof d.error === "string" ? d.error : JSON.stringify(d.error)}`);
-  }
-
-  function csv() {
-    if (!result) return;
-    const esc = (v: unknown) => `"${String(v ?? "").replaceAll('"', '""')}"`;
-    const headers = ["Handle", "Title", "Body (HTML)", "Vendor", "Type", "Tags", "Published", "Variant Price", "Variant Cost", "SEO Title", "SEO Description"];
-    const row = [result.handle, result.title, result.descriptionHtml, "Fort Crazypants", result.category, result.tags.join(", "), "FALSE", result.price, result.cost, result.seoTitle, result.metaDescription];
-    const blob = new Blob([headers.map(esc).join(",") + "\n" + row.map(esc).join(",")], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${result.handle}-shopify.csv`;
-    a.click();
-  }
-
-  return <>
-    <div className="top"><div><div className="eyebrow">AI Merchandising Manager</div><h1 className="title">Turn one product into a complete campaign.</h1><div className="muted">Import it, score it, merchandise it, create content, save it, and publish when ready.</div></div></div>
-    <div className="grid">
-      <section className="card">
-        <h2>Product details</h2>
-        <div className="fields">
-          <div className="field full">
-            <label>Product or affiliate URL</label>
-            <div style={{ display: "flex", gap: 10 }}>
-              <input style={{ flex: 1 }} value={form.url} onChange={e => change("url", e.target.value)} placeholder="Amazon, Mavely, CJ, AliExpress, supplier, or product URL" />
-              <button className="secondary" onClick={importProduct} disabled={importing}>{importing ? "Importing…" : "Import from link"}</button>
-            </div>
-            <small className="muted">Shortened affiliate links are followed automatically when the destination allows access.</small>
-          </div>
-          <div className="field full">
-            <label>Mavely affiliate link</label>
-            <input value={form.mavelyLink} onChange={e => change("mavelyLink", e.target.value)} placeholder="https://mavely.app.link/..." />
-            <small className="muted">Used as the shop link in generated captions, emails, and blog posts instead of the source URL.</small>
-          </div>
-          {image && <div className="field full"><label>Imported product image</label><div style={{ background: "#f7f7f3", borderRadius: 14, padding: 14, textAlign: "center" }}><img src={image} alt={form.name || "Imported product"} style={{ maxWidth: "100%", maxHeight: 260, objectFit: "contain", borderRadius: 10 }} /></div></div>}
-          <div className="field full"><label>Product name</label><input value={form.name} onChange={e => change("name", e.target.value)} /></div>
-          <div className="field"><label>Your cost</label><input type="number" value={form.cost} onChange={e => change("cost", +e.target.value)} /></div>
-          <div className="field"><label>Selling price</label><input type="number" value={form.price} onChange={e => change("price", +e.target.value)} /></div>
-          <div className="field"><label>Category</label><input value={form.category} onChange={e => change("category", e.target.value)} /></div>
-          <div className="field"><label>Audience</label><input value={form.audience} onChange={e => change("audience", e.target.value)} /></div>
-          <div className="field full"><label>Problem it solves</label><textarea rows={2} value={form.problem} onChange={e => change("problem", e.target.value)} /></div>
-          <div className="field full"><label>Features, separated by commas</label><textarea rows={3} value={form.features} onChange={e => change("features", e.target.value)} /></div>
-          <div className="field"><label>Shipping days</label><input type="number" value={form.shippingDays} onChange={e => change("shippingDays", +e.target.value)} /></div>
-          <div className="field"><label>Competition</label><select value={form.competition} onChange={e => change("competition", e.target.value)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
-          <div className="field full"><label>Demo factor: {form.demoFactor}/10</label><input type="range" min="1" max="10" value={form.demoFactor} onChange={e => change("demoFactor", +e.target.value)} /></div>
-        </div>
-        <div className="actions"><button className="primary" onClick={generate} disabled={loading}>{loading ? "Building campaign…" : "Generate product package"}</button></div>
-      </section>
-      <section className="card">
-        {result ? <>
-          <div className="score"><div className="scoreball">{result.score}</div><div><div className="eyebrow" style={{ color: "#f0c85a" }}>Fort Score</div><h2 style={{ margin: "3px 0" }}>{result.verdict}</h2><div style={{ opacity: .75, fontSize: 13 }}>{result.title}</div></div></div>
-          <div className="metrics"><div className="metric"><span className="muted">Margin</span><b>{result.margin}%</b></div><div className="metric"><span className="muted">Price</span><b>${result.price}</b></div><div className="metric"><span className="muted">Ship time</span><b>{result.shippingDays}d</b></div></div>
-          <div className="tabs">{Object.keys(views).map(x => <button key={x} className={`tab ${tab === x ? "on" : ""}`} onClick={() => setTab(x)}>{x}</button>)}</div>
-          <div className="output">{output}</div>
-          <div className="actions"><button className="secondary" onClick={() => navigator.clipboard.writeText(output)}>Copy</button><button className="secondary" onClick={save}>Save product</button><button className="secondary" onClick={csv}>Export Shopify CSV</button><button className="primary" onClick={publish}>Publish draft</button></div>
-        </> : <div className="empty"><div style={{ fontSize: 46 }}>✦</div><h2>Your campaign will appear here</h2><p>Paste a link to import details, review the form, then generate a scored Shopify-ready product package.</p></div>}
-        {message && <div className="status">{message}</div>}
-      </section>
-    </div>
-    <section id="integrations" className="card saved"><h2>Integration status</h2><div className="metrics"><div className="metric"><span className="muted">Link importer</span><b>Ready</b><small>Metadata + affiliate redirects</small></div><div className="metric"><span className="muted">AI generation</span><b>Ready</b><small>Built-in generator</small></div><div className="metric"><span className="muted">Shopify</span><b>Optional</b><small>Add Admin token</small></div><div className="metric"><span className="muted">Database</span><b>Optional</b><small>Add Supabase keys</small></div></div></section>
-  </>;
+export default function ProductStudio(){
+ const [form,setForm]=useState(initial); const [result,setResult]=useState<GeneratedProduct|null>(null); const [loading,setLoading]=useState(false); const [tab,setTab]=useState("Listing"); const [message,setMessage]=useState("");
+ const output=useMemo(()=>result?views[tab](result):"",[result,tab]);
+ const change=(key:keyof ProductInput,value:string|number)=>setForm(f=>({...f,[key]:value}));
+ async function generate(){setLoading(true);setMessage("");try{const r=await fetch("/api/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});const d=await r.json();if(!r.ok)throw new Error(d.error);setResult(d)}catch(e){setMessage(e instanceof Error?e.message:"Generation failed")}finally{setLoading(false)}}
+ function save(){if(!result)return;const existing=JSON.parse(localStorage.getItem("fort-products")||"[]");localStorage.setItem("fort-products",JSON.stringify([result,...existing.filter((x:GeneratedProduct)=>x.id!==result.id)]));setMessage("Saved to your product library.")}
+ async function publish(){if(!result)return;setMessage("Publishing draft…");const r=await fetch("/api/shopify/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(result)});const d=await r.json();setMessage(r.ok?`Draft created in Shopify: ${d.title}`:`Not published: ${typeof d.error==='string'?d.error:JSON.stringify(d.error)}`)}
+ function csv(){if(!result)return;const esc=(v:unknown)=>`"${String(v??"").replaceAll('"','""')}"`;const headers=["Handle","Title","Body (HTML)","Vendor","Type","Tags","Published","Variant Price","Variant Cost","SEO Title","SEO Description"];
+ const row=[result.handle,result.title,result.descriptionHtml,"Fort Crazypants",result.category,result.tags.join(", "),"FALSE",result.price,result.cost,result.seoTitle,result.metaDescription];const blob=new Blob([headers.map(esc).join(",")+"\n"+row.map(esc).join(",")],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`${result.handle}-shopify.csv`;a.click()}
+ return <AppContent />;
+ function AppContent(){return <><div className="top"><div><div className="eyebrow">AI Merchandising Manager</div><h1 className="title">Turn one product into a complete campaign.</h1><div className="muted">Score it, merchandise it, create content, save it, and publish when ready.</div></div></div><div className="grid"><section className="card"><h2>Product details</h2><div className="fields"><div className="field full"><label>Product URL</label><input value={form.url} onChange={e=>change("url",e.target.value)} placeholder="Amazon, Mavely, supplier, or product URL"/></div><div className="field full"><label>Product name</label><input value={form.name} onChange={e=>change("name",e.target.value)}/></div><div className="field"><label>Your cost</label><input type="number" value={form.cost} onChange={e=>change("cost",+e.target.value)}/></div><div className="field"><label>Selling price</label><input type="number" value={form.price} onChange={e=>change("price",+e.target.value)}/></div><div className="field"><label>Category</label><input value={form.category} onChange={e=>change("category",e.target.value)}/></div><div className="field"><label>Audience</label><input value={form.audience} onChange={e=>change("audience",e.target.value)}/></div><div className="field full"><label>Problem it solves</label><textarea rows={2} value={form.problem} onChange={e=>change("problem",e.target.value)}/></div><div className="field full"><label>Features, separated by commas</label><textarea rows={3} value={form.features} onChange={e=>change("features",e.target.value)}/></div><div className="field"><label>Shipping days</label><input type="number" value={form.shippingDays} onChange={e=>change("shippingDays",+e.target.value)}/></div><div className="field"><label>Competition</label><select value={form.competition} onChange={e=>change("competition",e.target.value)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div><div className="field full"><label>Demo factor: {form.demoFactor}/10</label><input type="range" min="1" max="10" value={form.demoFactor} onChange={e=>change("demoFactor",+e.target.value)}/></div></div><div className="actions"><button className="primary" onClick={generate} disabled={loading}>{loading?"Building campaign…":"Generate product package"}</button></div></section><section className="card">{result?<><div className="score"><div className="scoreball">{result.score}</div><div><div className="eyebrow" style={{color:"#f0c85a"}}>Fort Score</div><h2 style={{margin:"3px 0"}}>{result.verdict}</h2><div style={{opacity:.75,fontSize:13}}>{result.title}</div></div></div><div className="metrics"><div className="metric"><span className="muted">Margin</span><b>{result.margin}%</b></div><div className="metric"><span className="muted">Price</span><b>${result.price}</b></div><div className="metric"><span className="muted">Ship time</span><b>{result.shippingDays}d</b></div></div><div className="tabs">{Object.keys(views).map(x=><button key={x} className={`tab ${tab===x?"on":""}`} onClick={()=>setTab(x)}>{x}</button>)}</div><div className="output">{output}</div><div className="actions"><button className="secondary" onClick={()=>navigator.clipboard.writeText(output)}>Copy</button><button className="secondary" onClick={save}>Save product</button><button className="secondary" onClick={csv}>Export Shopify CSV</button><button className="primary" onClick={publish}>Publish draft</button></div></>:<div className="empty"><div style={{fontSize:46}}>✦</div><h2>Your campaign will appear here</h2><p>Complete the form and generate a scored, Shopify-ready product package.</p></div>}{message&&<div className="status">{message}</div>}</section></div><section id="integrations" className="card saved"><h2>Integration status</h2><div className="metrics"><div className="metric"><span className="muted">AI generation</span><b>Ready</b><small>Built-in generator</small></div><div className="metric"><span className="muted">Shopify</span><b>Optional</b><small>Add Admin token</small></div><div className="metric"><span className="muted">Database</span><b>Optional</b><small>Add Supabase keys</small></div></div></section></>}
 }
