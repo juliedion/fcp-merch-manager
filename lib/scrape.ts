@@ -129,15 +129,14 @@ function extractAmazonFeatureBullets(html: string): string | null {
   return bullets.length ? bullets.join(". ") : null;
 }
 
-// Amazon (and similar retailers) is more likely to serve a bot-check / degraded page to
-// requests that look automated — a bare User-Agent with no other browser-typical headers is
-// a strong bot signal. These additional headers make the request look like a real browser,
-// which reduces (but can't fully eliminate) the chance of being blocked from cloud/serverless
-// IP ranges like Vercel's, which Amazon rate-limits more aggressively than residential IPs.
+// Claiming to be a full desktop Chrome browser via User-Agent while not sending the other
+// headers real Chrome always sends (sec-ch-ua, Sec-Fetch-Site, Sec-Fetch-Mode, etc.) is a
+// more suspicious, inconsistent fingerprint to bot detection than an honest custom UA that
+// doesn't pretend to be something it isn't — confirmed in production, where impersonating
+// Chrome caused Amazon to fully block requests from Vercel's IPs that previously got partial
+// data through. Keep the plain, honest identifier.
 const SCRAPE_HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-  "Accept-Language": "en-US,en;q=0.9"
+  "User-Agent": "Mozilla/5.0 (compatible; FortCrazypantsBot/1.0; +https://fortcrazypants.com)"
 };
 
 // If Amazon serves its interstitial "Type the characters you see" bot-check page instead of
