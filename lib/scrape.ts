@@ -129,18 +129,42 @@ function extractAmazonFeatureBullets(html: string): string | null {
   return bullets.length ? bullets.join(". ") : null;
 }
 
-export async function scrapeProduct(url: string): Promise<ScrapedProduct> {
+// Amazon (and similar retailers) is more likely to serve a bot-check / degraded page to
+// requests that look automated — a bare User-Agent with no other browser-typical headers is
+// a strong bot signal. These additional headers make the request look like a real browser,
+// which reduces (but can't fully eliminate) the chance of being blocked from cloud/serverless
+// IP ranges like Vercel's, which Amazon rate-limits more aggressively than residential IPs.
+const SCRAPE_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9"
+};
+
+// If Amazon serves its interstitial "Type the characters you see" bot-check page instead of
+// the real product page, every price/description pattern below will legitimately find
+// nothing — that's not a missing pattern, it's a blocked request. Detecting it explicitly
+// lets the UI say "Amazon blocked this request" instead of the misleading "no price found
+// on this page", since the latter implies the product genuinely has no listed price.
+function isBotCheckPage(html: string): boolean {
+  return /Type the characters you see|api-services-support@amazon\.com|Enter the characters you see below/i.test(html);
+}
+
+export async function scrapeProduct(url: string): Promise<ScrapedProduct & { blocked?: boolean }> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 12000);
   let html = "";
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; FortCrazypantsBot/1.0; +https://fortcrazypants.com)" }
+      headers: SCRAPE_HEADERS
     });
     html = await response.text();
   } finally {
     clearTimeout(timeout);
+  }
+
+  if (isBotCheckPage(html)) {
+    return { title: null, price: null, images: [], description: null, blocked: true };
   }
 
   const ogTitle = metaContent(html, "property", "og:title");
