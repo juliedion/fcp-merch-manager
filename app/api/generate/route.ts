@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateProduct } from "@/lib/generator";
 import { formatApiError } from "@/lib/apiError";
+import { applyAiCopy, generateAICopy, isAiCopyEnabled } from "@/lib/aiCopywriter";
 
 const schema = z.object({
   url: z.string().default(""), name: z.string().min(2), cost: z.coerce.number().min(0), price: z.coerce.number().positive(),
@@ -15,7 +16,12 @@ const schema = z.object({
 export async function POST(req: Request) {
   try {
     const input = schema.parse(await req.json());
-    return NextResponse.json(generateProduct(input));
+    const deterministic = generateProduct(input);
+
+    if (!isAiCopyEnabled()) return NextResponse.json({ ...deterministic, aiCopyUsed: false });
+
+    const overrides = await generateAICopy(input, deterministic);
+    return NextResponse.json({ ...applyAiCopy(deterministic, overrides), aiCopyUsed: Boolean(overrides) });
   } catch (error) {
     return NextResponse.json({ error: formatApiError(error, "Invalid product data") }, { status: 400 });
   }
