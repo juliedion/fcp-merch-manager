@@ -173,6 +173,24 @@ export async function scrapeProduct(url: string): Promise<ScrapedProduct & { blo
 
   const price = extractPrice(html);
 
+  // TEMPORARY debug logging to diagnose why Amazon price extraction fails specifically from
+  // Vercel's serverless IPs even though the same patterns match when fetched from elsewhere.
+  // Server-side only (Vercel function logs) — never exposed in the API response. Remove once
+  // the cause is confirmed.
+  if (price === null && /amazon\./i.test(url)) {
+    const hasOffscreen = html.includes('class="a-offscreen"');
+    const hasPriceAmount = html.includes('"priceAmount"');
+    const offscreenSample = html.match(/.{0,40}class="a-offscreen">.{0,40}/);
+    console.log("[scrape-debug]", JSON.stringify({
+      url,
+      htmlLength: html.length,
+      hasOffscreen,
+      hasPriceAmount,
+      offscreenSample: offscreenSample?.[0] ?? null,
+      titleFound: title
+    }));
+  }
+
   const ogImages = allMetaContent(html, "property", "og:image").filter(src => !/share-icons|\/logo[./]/i.test(src));
   const images = ogImages.length > 0 ? Array.from(new Set(ogImages)).slice(0, 5) : extractAmazonHiResImages(html);
 
