@@ -185,7 +185,9 @@ export default function WinningProducts() {
       audience: p.targetAudience, problem: p.problemSolved, features: "",
       shippingDays: p.shippingDays.value ?? 7, competition: p.competitionLevel, demoFactor,
       productType: isAmazon ? "amazon_affiliate" as const : "dropshipping" as const,
-      amazonUrl: isAmazon ? p.url : "", affiliateUrl: ""
+      amazonUrl: isAmazon ? p.url : "", affiliateUrl: "",
+      isAffiliateProduct: isAmazon, merchant: isAmazon ? "Amazon" : "", affiliateNetwork: isAmazon ? "Amazon Associates" : "",
+      vendor: isAmazon ? "Amazon" : "Fort Crazypants", compareAtPrice: 0, fcpVerdict: ""
     };
     localStorage.setItem("fort-handoff", JSON.stringify(handoff));
     router.push("/");
@@ -220,7 +222,9 @@ export default function WinningProducts() {
       url: m.link, name: m.title, cost: 0, price: m.price || 0, category: "", audience: "", problem: "", features: "",
       shippingDays: 7, competition: "medium" as const, demoFactor: 6,
       productType: isAmazon ? "amazon_affiliate" as const : "dropshipping" as const,
-      amazonUrl: isAmazon ? m.link : "", affiliateUrl: ""
+      amazonUrl: isAmazon ? m.link : "", affiliateUrl: "",
+      isAffiliateProduct: isAmazon, merchant: isAmazon ? "Amazon" : "", affiliateNetwork: isAmazon ? "Amazon Associates" : "",
+      vendor: isAmazon ? "Amazon" : "Fort Crazypants", compareAtPrice: 0, fcpVerdict: ""
     };
     localStorage.setItem("fort-handoff", JSON.stringify(handoff));
     router.push("/");
@@ -243,7 +247,9 @@ export default function WinningProducts() {
         audience: p.targetAudience, problem: p.problemSolved, features: "",
         shippingDays: p.shippingDays.value ?? 7, competition: p.competitionLevel, demoFactor,
         productType: isAmazon ? "amazon_affiliate" as const : "dropshipping" as const,
-        amazonUrl: isAmazon ? p.url : "", affiliateUrl: ""
+        amazonUrl: isAmazon ? p.url : "", affiliateUrl: "",
+        isAffiliateProduct: isAmazon, merchant: isAmazon ? "Amazon" : "", affiliateNetwork: isAmazon ? "Amazon Associates" : "",
+        vendor: isAmazon ? "Amazon" : "Fort Crazypants", compareAtPrice: 0, fcpVerdict: ""
       };
       const genRes = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
       const generated = await genRes.json();

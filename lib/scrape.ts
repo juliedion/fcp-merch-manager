@@ -204,10 +204,48 @@ export type InferenceResult = {
     url: string; name: string; cost: number; price: number; category: string; audience: string;
     problem: string; features: string; shippingDays: number; competition: "low" | "medium" | "high"; demoFactor: number;
     productType: "amazon_affiliate" | "dropshipping" | "wholesale" | "private_label"; amazonUrl: string; affiliateUrl: string;
+    isAffiliateProduct: boolean; merchant: string; affiliateNetwork: string; vendor: string; compareAtPrice: number; fcpVerdict: string;
   };
   scrapedFields: InferredField[];
   estimatedFields: InferredField[];
 };
+
+// Merchant detection beyond the original Amazon-only check. Order matters: Amazon is
+// checked first (existing behavior, unaffected). None of these ever modify/strip the URL's
+// query string — tracking params (Amazon `tag=`, Mavely-style click IDs, etc.) must survive
+// verbatim since they're how the affiliate commission gets attributed. See lib/scrape.test.ts
+// for an explicit regression test on that.
+function detectMerchantAndNetwork(url: string): { isAffiliate: boolean; merchant: string; network: string } {
+  let hostname = "";
+  try {
+    hostname = new URL(url, "https://example.com").hostname.toLowerCase();
+  } catch {
+    return { isAffiliate: false, merchant: "", network: "" };
+  }
+
+  if (/(^|\.)amazon\.[a-z.]+$|^amzn\.to$/i.test(hostname)) {
+    return { isAffiliate: true, merchant: "Amazon", network: "Amazon Associates" };
+  }
+  if (/(^|\.)walmart\.com$|^wmt\.co$/i.test(hostname)) {
+    return { isAffiliate: true, merchant: "Walmart", network: "Impact" };
+  }
+  if (/(^|\.)target\.com$|^tgt\.gs$/i.test(hostname)) {
+    return { isAffiliate: true, merchant: "Target", network: "Impact" };
+  }
+  // Mavely-style affiliate links: either the mavely.app/co link-shortener domain itself, or
+  // a merchant URL carrying Mavely's own tracking param (its browser extension appends
+  // "mavely" or "avantlink"-style params to the destination URL rather than always
+  // redirecting through a mavely.app short link).
+  if (/(^|\.)mavely\.(app|co)$/i.test(hostname) || /[?&](mavely|mv_)[a-z_]*=/i.test(url)) {
+    return { isAffiliate: true, merchant: "Mavely", network: "Mavely" };
+  }
+  return { isAffiliate: false, merchant: "", network: "" };
+}
+
+// Test-only export — kept as a thin named re-export rather than exporting the internal
+// function directly under its real name, so it stays clearly marked as an internal detail
+// exposed for unit testing (lib/affiliate.test.ts), not part of this module's public API.
+export const detectMerchantAndNetworkForTest = detectMerchantAndNetwork;
 
 export type ResearchSummary = {
   image: string | null;
@@ -311,11 +349,15 @@ export function inferProductInput(scraped: ScrapedProduct, url: string): Inferen
 
   // Amazon/Amazon-affiliate-shortlink URLs default to the Amazon Affiliate product type
   // with the URL pre-filled — the common case this app's Amazon-URL import is built for.
-  const isAmazonUrl = /(^|\.)amazon\.[a-z.]+$|^amzn\.to$/i.test(new URL(url, "https://example.com").hostname);
+  // Non-Amazon merchants (Walmart, Target, Mavely-pattern links) are detected the same way
+  // but keep productType as "dropshipping" (that enum only has an Amazon-specific value) —
+  // isAffiliateProduct is the field that actually drives the affiliate flow for them.
+  const detected = detectMerchantAndNetwork(url);
+  const isAmazonUrl = detected.merchant === "Amazon";
 
   return {
     input: {
-      url,
+      url, // stored verbatim — never strip tracking params like Amazon's tag= or Mavely's click IDs
       name,
       cost,
       price,
@@ -328,7 +370,13 @@ export function inferProductInput(scraped: ScrapedProduct, url: string): Inferen
       demoFactor: matched.demoFactor,
       productType: isAmazonUrl ? "amazon_affiliate" : "dropshipping",
       amazonUrl: isAmazonUrl ? url : "",
-      affiliateUrl: ""
+      affiliateUrl: detected.isAffiliate && !isAmazonUrl ? url : "",
+      isAffiliateProduct: detected.isAffiliate,
+      merchant: detected.merchant,
+      affiliateNetwork: detected.network,
+      vendor: detected.isAffiliate ? detected.merchant : "Fort Crazypants",
+      compareAtPrice: 0,
+      fcpVerdict: ""
     },
     scrapedFields,
     estimatedFields

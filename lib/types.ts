@@ -18,6 +18,29 @@ export const DEFAULT_CTA_TEXT: Record<ProductType, string> = {
 
 export const AMAZON_ASSOCIATE_DISCLOSURE = "As an Amazon Associate, I earn from qualifying purchases.";
 
+// Generic (non-Amazon) affiliate disclosure — used as the default disclosure for any
+// affiliate product whose merchant is NOT "Amazon" (Amazon keeps its FTC-worded disclosure
+// above). Both are just *defaults*; ProductSettings.disclosureText remains the one editable
+// global override, and buildCtaAndDisclosure() decides which default applies per-merchant.
+export const GENERIC_AFFILIATE_DISCLOSURE = "We may earn a commission if you purchase through this link.";
+
+// Merchant -> suggested CTA button label. Purely a suggestion surfaced in the product
+// editor (and used as the generator's default when no override is set) — always user
+// editable via ctaButtonText. Falls back to "View Product" for an unrecognized/blank merchant.
+export const AFFILIATE_BUTTON_LABELS: Record<string, string> = {
+  Amazon: "Buy on Amazon",
+  Walmart: "Buy at Walmart",
+  Target: "Buy at Target",
+  Mavely: "View Deal",
+  Impact: "Shop Now",
+  CJ: "Shop Now",
+  ShareASale: "Shop Now",
+  Awin: "Shop Now",
+  Rakuten: "Shop Now",
+  "TikTok Shop": "Shop on TikTok"
+};
+export const DEFAULT_AFFILIATE_CTA_TEXT = "View Product";
+
 export type ProductInput = {
   url: string;
   name: string;
@@ -33,6 +56,18 @@ export type ProductInput = {
   productType: ProductType;
   amazonUrl: string;
   affiliateUrl: string;
+  // --- Generic affiliate-product support (extends the Amazon-only mechanism above) ---
+  // Whether this product is a "buy elsewhere" affiliate product at all. Independent of the
+  // ProductType enum (business model) so Walmart/Target/Mavely/etc. affiliate flows don't
+  // need their own ProductType values. Defaults to (productType === "amazon_affiliate") for
+  // backward compatibility — see lib/generator.ts buildCtaAndDisclosure / docs/affiliate-products.md
+  // for the full reasoning.
+  isAffiliateProduct: boolean;
+  merchant: string; // e.g. "Amazon", "Walmart", "Target", "Mavely" — free text, drives CTA-label suggestion + storefront badge
+  affiliateNetwork: string; // e.g. "Amazon Associates", "Impact", "CJ", "ShareASale", "Awin", "Rakuten", "Mavely"
+  vendor: string; // Shopify vendor/brand field — defaults to "Fort Crazypants" for non-affiliate products
+  compareAtPrice: number; // 0 = unset/not shown
+  fcpVerdict: string; // free-text, user-editable marketing blurb (distinct from the auto score-derived `verdict`)
 };
 
 export type ChecklistKey =

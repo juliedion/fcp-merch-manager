@@ -1,4 +1,4 @@
-import { AMAZON_ASSOCIATE_DISCLOSURE, CuratedCollection, CURATED_COLLECTIONS, DEFAULT_CTA_TEXT, GeneratedProduct, ImagePrompt, Merchandising, PricingEngine, PricingTier, ProductInput, Rating, Recommendation, RecommendationKey, ScoreFactor, SEOContent, VideoPrompt } from "./types";
+import { AFFILIATE_BUTTON_LABELS, AMAZON_ASSOCIATE_DISCLOSURE, CuratedCollection, CURATED_COLLECTIONS, DEFAULT_AFFILIATE_CTA_TEXT, DEFAULT_CTA_TEXT, GENERIC_AFFILIATE_DISCLOSURE, GeneratedProduct, ImagePrompt, Merchandising, PricingEngine, PricingTier, ProductInput, Rating, Recommendation, RecommendationKey, ScoreFactor, SEOContent, VideoPrompt } from "./types";
 
 // Plain .includes() substring matching on short keywords (e.g. "pan" for Kitchen) matches
 // inside unrelated words — "companion" contains "pan" — misfiring category/room/cross-sell
@@ -32,18 +32,42 @@ export function detectCuratedCollections(text: string): CuratedCollection[] {
   return CURATED_COLLECTIONS.filter(c => CURATED_COLLECTION_KEYWORDS[c].some(k => hasKeyword(lower, k)));
 }
 
-// Per-product-type CTA + affiliate disclosure. Only Amazon Affiliate products link out to
-// Amazon and carry the FTC-required disclosure — dropship/wholesale/private-label products
-// are ordinary Shopify purchases with no affiliate relationship to disclose.
+// CTA + affiliate disclosure. Generalized beyond the original Amazon-only binary: any
+// product with isAffiliateProduct=true (regardless of the ProductType business-model enum)
+// links out to its merchant and carries a disclosure. isAffiliateProduct defaults to
+// (productType === "amazon_affiliate") wherever ProductInput objects are constructed, so
+// existing Amazon Affiliate products behave identically to before this change — same CTA
+// text ("Check Today's Price on Amazon"), same URL fallback (affiliateUrl || amazonUrl),
+// same exact FTC-required disclosure wording. New non-Amazon affiliate products (Walmart,
+// Target, Mavely, etc.) get a merchant-suggested CTA label (still user-overridable via
+// ctaButtonText on the generated product) and the generic affiliate disclosure — Amazon
+// specifically always keeps the FTC wording even if isAffiliateProduct was set independently
+// of productType, since that exact wording is a legal requirement for Amazon Associates links.
 export function buildCtaAndDisclosure(input: ProductInput): { ctaButtonText: string; ctaButtonUrl: string; disclosureText: string } {
-  if (input.productType === "amazon_affiliate") {
-    return {
-      ctaButtonText: DEFAULT_CTA_TEXT.amazon_affiliate,
-      ctaButtonUrl: input.affiliateUrl || input.amazonUrl || "",
-      disclosureText: AMAZON_ASSOCIATE_DISCLOSURE
-    };
+  const isAffiliate = input.isAffiliateProduct ?? input.productType === "amazon_affiliate";
+  if (!isAffiliate) {
+    return { ctaButtonText: DEFAULT_CTA_TEXT[input.productType], ctaButtonUrl: "", disclosureText: "" };
   }
-  return { ctaButtonText: DEFAULT_CTA_TEXT[input.productType], ctaButtonUrl: "", disclosureText: "" };
+
+  const merchant = (input.merchant || (input.productType === "amazon_affiliate" ? "Amazon" : "")).trim();
+  const isAmazon = merchant.toLowerCase() === "amazon" || input.productType === "amazon_affiliate";
+  const url = input.affiliateUrl || input.amazonUrl || "";
+
+  // Amazon keeps its exact original wording ("Check Today's Price on Amazon") even though
+  // AFFILIATE_BUTTON_LABELS.Amazon documents a different suggested label ("Buy on Amazon")
+  // for brand-new non-legacy Amazon affiliate flows — this preserves already-published
+  // product copy/behavior for every existing Amazon Affiliate product untouched by this change.
+  const suggestedCta = isAmazon
+    ? DEFAULT_CTA_TEXT.amazon_affiliate
+    : merchant && AFFILIATE_BUTTON_LABELS[merchant]
+    ? AFFILIATE_BUTTON_LABELS[merchant]
+    : DEFAULT_AFFILIATE_CTA_TEXT;
+
+  return {
+    ctaButtonText: suggestedCta,
+    ctaButtonUrl: url,
+    disclosureText: isAmazon ? AMAZON_ASSOCIATE_DISCLOSURE : GENERIC_AFFILIATE_DISCLOSURE
+  };
 }
 
 const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -724,7 +748,7 @@ export function generateProduct(input: ProductInput): GeneratedProduct {
     scoreFormula,
     recommendation,
     merchandising,
-    pricing: input.productType === "amazon_affiliate" ? buildAffiliatePricing(input) : buildPricingEngine(input),
+    pricing: (input.isAffiliateProduct ?? input.productType === "amazon_affiliate") ? buildAffiliatePricing(input) : buildPricingEngine(input),
     imagePrompts: buildImagePrompts(input, title, featureList),
     videoPrompts: buildVideoPrompts(input, title, featureList, score, margin),
     seo: buildSeoContent(input, title, handle, seoTitle, metaDescription, altText, faq, featureList, collections, merchandising.crossSellIdeas, blogTitle, score, margin)

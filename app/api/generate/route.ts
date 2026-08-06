@@ -10,8 +10,17 @@ const schema = z.object({
   features: z.string().default(""), shippingDays: z.coerce.number().min(0).default(7),
   competition: z.enum(["low", "medium", "high"]).default("medium"), demoFactor: z.coerce.number().min(1).max(10).default(7),
   productType: z.enum(["amazon_affiliate", "dropshipping", "wholesale", "private_label"]).default("dropshipping"),
-  amazonUrl: z.string().default(""), affiliateUrl: z.string().default("")
-});
+  amazonUrl: z.string().default(""), affiliateUrl: z.string().default(""),
+  // Generic affiliate-product fields (see lib/types.ts). isAffiliateProduct defaults to
+  // (productType === "amazon_affiliate") when the caller doesn't send it, for backward
+  // compatibility with any existing client/localStorage payload that predates this field.
+  isAffiliateProduct: z.coerce.boolean().optional(),
+  merchant: z.string().default(""), affiliateNetwork: z.string().default(""),
+  vendor: z.string().default("Fort Crazypants"), compareAtPrice: z.coerce.number().min(0).default(0), fcpVerdict: z.string().default("")
+}).transform(v => ({ ...v, isAffiliateProduct: v.isAffiliateProduct ?? v.productType === "amazon_affiliate" }))
+  .refine(v => !v.isAffiliateProduct || /^https:\/\//i.test(v.affiliateUrl || v.amazonUrl || ""), {
+    message: "Affiliate products require a valid https:// Affiliate URL.", path: ["affiliateUrl"]
+  });
 
 export async function POST(req: Request) {
   try {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildAffiliateMetafieldsPayload } from "@/lib/shopifyMetafields";
 
 async function getAccessToken(domain: string): Promise<string> {
   const clientId = process.env.SHOPIFY_API_KEY;
@@ -33,6 +34,9 @@ export async function POST(req: Request) {
   const product = await req.json();
   const id = product.shopifyId;
   if (!id || typeof id !== "string") return NextResponse.json({ error: "Missing shopifyId of the product to update." }, { status: 400 });
+  if (product.isAffiliateProduct && !/^https:\/\//i.test(String(product.affiliateUrl || product.amazonUrl || ""))) {
+    return NextResponse.json({ error: "Affiliate products require a valid https:// Affiliate URL." }, { status: 400 });
+  }
 
   const buttonColor = typeof product.ctaButtonColor === "string" && /^#[0-9a-f]{3,6}$/i.test(product.ctaButtonColor) ? product.ctaButtonColor : "#1a5f4a";
   const ctaHtml = product.ctaButtonText
@@ -97,5 +101,19 @@ export async function POST(req: Request) {
     collectionErrors.push(e instanceof Error ? e.message : "Collection matching failed.");
   }
 
-  return NextResponse.json({ ...updated, imagesAttached: imageUrls.length, mediaErrors, collectionsAdded, collectionErrors });
+  let affiliateMetafieldsSet = false;
+  let affiliateMetafieldsError: unknown = null;
+  const affiliateMetafields = buildAffiliateMetafieldsPayload(id, product);
+  if (affiliateMetafields.length > 0) {
+    const metafieldsSetMutation = `mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { id key } userErrors { field message } } }`;
+    const metafieldsSetResponse = await fetch(`https://${domain}/admin/api/${version}/graphql.json`, { method: "POST", headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token }, body: JSON.stringify({ query: metafieldsSetMutation, variables: { metafields: affiliateMetafields } }) });
+    const metafieldsSetData = await metafieldsSetResponse.json();
+    if (!metafieldsSetResponse.ok || metafieldsSetData.errors || metafieldsSetData.data?.metafieldsSet?.userErrors?.length) {
+      affiliateMetafieldsError = metafieldsSetData.errors || metafieldsSetData.data?.metafieldsSet?.userErrors;
+    } else {
+      affiliateMetafieldsSet = true;
+    }
+  }
+
+  return NextResponse.json({ ...updated, imagesAttached: imageUrls.length, mediaErrors, collectionsAdded, collectionErrors, affiliateMetafieldsSet, affiliateMetafieldsError });
 }

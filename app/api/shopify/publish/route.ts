@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildAffiliateMetafieldsPayload } from "@/lib/shopifyMetafields";
 
 // Custom apps created via the Shopify Dev Dashboard don't expose a static Admin API
 // token in the UI — instead we exchange the app's Client ID/Secret for a short-lived
@@ -28,6 +29,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Could not authenticate with Shopify." }, { status: 502 });
   }
   const product = await req.json();
+
+  // Server-side affiliate validation — never publish an incomplete affiliate product,
+  // regardless of what client-side validation already did (client validation can be bypassed).
+  if (product.isAffiliateProduct && !/^https:\/\//i.test(String(product.affiliateUrl || product.amazonUrl || ""))) {
+    return NextResponse.json({ error: "Affiliate products require a valid https:// Affiliate URL." }, { status: 400 });
+  }
+
   // CTA button + disclosure are appended here (not baked into descriptionHtml at generation
   // time) so a Settings-page disclosure-text edit made after generation is still reflected
   // in what actually gets published.
@@ -189,5 +197,25 @@ export async function POST(req: Request) {
     collectionErrors.push(e instanceof Error ? e.message : "Collection matching failed.");
   }
 
-  return NextResponse.json({ ...created, imagesAttached: imageUrls.length, mediaErrors, inventoryLocked, inventoryError, priceSet, variantsCreated, collectionsAdded, collectionErrors });
+  // Affiliate metafields (custom.is_affiliate_product / affiliate_url / affiliate_network /
+  // merchant / cta_text / fcp_verdict) — set via a dedicated metafieldsSet call, additive to
+  // the fort_crazypants.source_url metafield set inline at creation above. Requires the
+  // `custom.*` metafield definitions to already exist in the store (see
+  // scripts/setup-affiliate-metafields.mjs) — metafieldsSet will still succeed without
+  // definitions (Shopify allows undefined metafields), so this is not a hard dependency.
+  let affiliateMetafieldsSet = false;
+  let affiliateMetafieldsError: unknown = null;
+  const affiliateMetafields = buildAffiliateMetafieldsPayload(created.id, product);
+  if (affiliateMetafields.length > 0) {
+    const metafieldsSetMutation = `mutation MetafieldsSet($metafields: [MetafieldsSetInput!]!) { metafieldsSet(metafields: $metafields) { metafields { id key } userErrors { field message } } }`;
+    const metafieldsSetResponse = await fetch(`https://${domain}/admin/api/${version}/graphql.json`, { method: "POST", headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token }, body: JSON.stringify({ query: metafieldsSetMutation, variables: { metafields: affiliateMetafields } }) });
+    const metafieldsSetData = await metafieldsSetResponse.json();
+    if (!metafieldsSetResponse.ok || metafieldsSetData.errors || metafieldsSetData.data?.metafieldsSet?.userErrors?.length) {
+      affiliateMetafieldsError = metafieldsSetData.errors || metafieldsSetData.data?.metafieldsSet?.userErrors;
+    } else {
+      affiliateMetafieldsSet = true;
+    }
+  }
+
+  return NextResponse.json({ ...created, imagesAttached: imageUrls.length, mediaErrors, inventoryLocked, inventoryError, priceSet, variantsCreated, collectionsAdded, collectionErrors, affiliateMetafieldsSet, affiliateMetafieldsError });
 }
