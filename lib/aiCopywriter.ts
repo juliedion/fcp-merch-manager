@@ -20,9 +20,13 @@ const SYSTEM_PROMPT = `You are an ecommerce copywriter for Fort Crazypants, a pr
 
 Write original, concise, honest copy based ONLY on the product facts given to you. Never invent specifications, materials, certifications, ages, dimensions, or safety claims that aren't in the provided facts. Never use fake urgency ("only X left!", "selling fast") or fabricated testimonials/reviews. Avoid unsupported superlatives ("the best", "guaranteed to") unless the facts explicitly support them.
 
+The product facts include a "fortScore" (0-100) and "fortVerdict" (e.g. "Strong test candidate") that Fort Crazypants already computed from margin/demand/competition — these are real, not invented. Always close the description with a short paragraph in this style: "<p><strong>Fort Crazypants verdict:</strong> {one honest sentence using the verdict/score, e.g. \\"This one earned a Fort Score of 82/100 — a strong test candidate for busy families.\\"}</p>" — keep the numeric score and verdict wording, but you may vary the sentence around it.
+
+The description must open with the exact heading "<h2>Why You'll Love It</h2>" — never the product's title or any other heading text.
+
 Respond with ONLY a single JSON object, no markdown fences, no commentary, matching this exact shape:
 {
-  "descriptionHtml": "string of simple HTML using <h2>, <p>, <ul><li> tags — a well-written, benefit-focused product description, 2-4 short paragraphs plus a bullet list",
+  "descriptionHtml": "string of simple HTML starting with <h2>Why You'll Love It</h2> exactly, then <p>/<ul><li> tags — a well-written, benefit-focused product description, 2-4 short paragraphs plus a bullet list, ending with the Fort Crazypants verdict paragraph described above",
   "tags": ["5 to 8 short, relevant, specific product tags — no generic filler tags"],
   "collections": ["choose 1-3 from this fixed list, only ones that genuinely fit: ${CURATED_COLLECTIONS.join(", ")}"],
   "imagePrompts": {
@@ -50,7 +54,10 @@ function buildUserPrompt(input: ProductInput, deterministic: GeneratedProduct): 
     price: input.price,
     productType: input.productType,
     existingBullets: deterministic.bullets,
-    existingBenefits: deterministic.benefits
+    existingBenefits: deterministic.benefits,
+    fortScore: deterministic.score,
+    fortVerdict: deterministic.verdict,
+    margin: deterministic.margin
   };
   return `Product facts (use only these — do not add anything not implied here):\n${JSON.stringify(facts, null, 2)}`;
 }
@@ -113,7 +120,11 @@ function sanitizeAiCopy(parsed: unknown): AiCopyOverrides | null {
   const overrides: AiCopyOverrides = {};
 
   if (typeof p.descriptionHtml === "string" && p.descriptionHtml.trim().includes("<")) {
-    overrides.descriptionHtml = p.descriptionHtml.trim();
+    // Force the opening heading regardless of what the model actually returned — prompting
+    // alone isn't reliable enough to guarantee exact text, and this heading is a fixed brand
+    // element, not something that should vary per product.
+    const withFixedHeading = p.descriptionHtml.trim().replace(/^\s*<h2>.*?<\/h2>/i, "<h2>Why You'll Love It</h2>");
+    overrides.descriptionHtml = /^\s*<h2>/i.test(withFixedHeading) ? withFixedHeading : `<h2>Why You'll Love It</h2>${withFixedHeading}`;
   }
 
   if (Array.isArray(p.tags)) {
