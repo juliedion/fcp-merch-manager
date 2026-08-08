@@ -88,18 +88,21 @@ function isGenericTitle(t: string | null): boolean {
   return GENERIC_TITLE_VALUES.has(t.trim().toLowerCase());
 }
 
-// Amazon's <title> tag is "Amazon.com : <product name> : <category1, category2>" — and the
-// product name itself is routinely 150-200+ characters of keyword-stuffed marketing copy.
-// Passing that straight through as a storefront product title renders as an unreadable wall
-// of text regardless of theme styling, so this strips the site-name wrapper AND shortens the
-// remaining name to a clean, readable title at a word/comma boundary.
+// Amazon's <title> tag is "Amazon.com : <product name> : <category1, category2>" on most
+// listings, but some serve "Amazon.com - <product name>" (hyphen instead of colon) or an
+// en-dash/em-dash variant — and the product name itself is routinely 150-200+ characters of
+// keyword-stuffed marketing copy. Passing that straight through as a storefront product title
+// renders as an unreadable wall of text (or literally starts with "Amazon.com - ") regardless
+// of theme styling, so this strips the site-name wrapper (whichever separator it used) AND
+// shortens the remaining name to a clean, readable title at a word/comma boundary.
 const MAX_TITLE_LENGTH = 80;
+const TITLE_SEPARATORS = [" : ", " - ", " – ", " — "];
 
 function cleanAmazonTitle(raw: string): string {
-  let title = raw.replace(/^amazon\.com\s*:\s*/i, "").trim();
-  // Drop Amazon's trailing " : Category, Subcategory" breadcrumb suffix, if present.
-  const lastColon = title.lastIndexOf(" : ");
-  if (lastColon > MAX_TITLE_LENGTH * 0.5) title = title.slice(0, lastColon).trim();
+  let title = raw.replace(/^amazon\.com\s*[:\-–—]\s*/i, "").trim();
+  // Drop Amazon's trailing " : Category, Subcategory" (or " - "/" – "/" — " variant) breadcrumb suffix, if present.
+  const lastSeparatorIndex = Math.max(...TITLE_SEPARATORS.map(sep => title.lastIndexOf(sep)));
+  if (lastSeparatorIndex > MAX_TITLE_LENGTH * 0.5) title = title.slice(0, lastSeparatorIndex).trim();
   return shortenTitle(title);
 }
 
