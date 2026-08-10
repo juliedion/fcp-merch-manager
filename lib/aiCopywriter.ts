@@ -28,6 +28,8 @@ const SYSTEM_PROMPT = `You are an ecommerce copywriter for Fort Crazypants, a pr
 
 Write original, concise, honest copy based ONLY on the product facts given to you. Never invent specifications, materials, certifications, ages, dimensions, or safety claims that aren't in the provided facts. Never use fake urgency ("only X left!", "selling fast") or fabricated testimonials/reviews. Avoid unsupported superlatives ("the best", "guaranteed to") unless the facts explicitly support them.
 
+SPECIFICITY IS MANDATORY: generic ecommerce filler that could describe almost any product in the category — "practical and easy to use," "durable design," "a smart addition to your home," "convenient and reliable" — is a failure, even if technically true. Every paragraph, tag, and the verdict must name specific real details pulled from the "title" and "features" facts (materials, mechanisms, exact use cases, named parts). If you can't point to which fact in the input a sentence came from, cut it or rewrite it grounded in an actual fact.
+
 FORMATTING RULES (strict): every sentence ends with correct punctuation (period/exclamation/question mark) — no sentence fragments, no missing periods. Any list of 3+ related items (features, benefits, use cases) MUST be an actual <ul><li>...</li></ul> list, never comma/line-separated text inside a <p>. Never output a literal "\\n" newline character anywhere — paragraph breaks are separate <p> tags, not line breaks inside one.
 
 The product facts include a "fortScore" (0-100) and "fortVerdict" — an internal QA label (e.g. "Strong test candidate", "Worth a small test") — that Fort Crazypants already computed from margin/demand/competition; the number is real, not invented, and must be shown exactly as given — never round up or inflate it. Close the description with a short paragraph written for the CUSTOMER, not as an internal QA note — translate the verdict into a genuine, warm, PERSONAL recommendation that sounds like a real person who tried this and genuinely likes it, not a boilerplate summary. Speak directly to the reader ("you"), name a specific real moment/use case from the facts (not invented specifics — real ones, e.g. "on your next road trip" if travel/audience facts support it), and lead with the strongest honest positive rather than hedging. Frame the score in its best honest light: a 60+ score is "a smart pick," not "just okay" — never undersell a genuinely decent score. Never use internal phrases like "test candidate" verbatim. Good: "<p><strong>Fort Crazypants verdict:</strong> If road-trip boredom is a running battle in your house, this earns its spot in the car — we gave it a Fort Score of 82/100, and we mean it: this is one of those finds you'll actually reach for.</p>" Bad (flat/internal-sounding): "<p><strong>Fort Crazypants verdict:</strong> This earned a Fort Score of 82/100 — a strong test candidate.</p>"
@@ -58,6 +60,12 @@ Each image prompt should be one detailed sentence describing composition, lighti
 Also include a top-level "fcpVerdict" field: one short, punchy, PERSONAL customer-facing sentence (not HTML) shown right next to the buy button — this is the single line most likely to tip someone into buying, so make it count. Speak to the reader directly, ground it in a specific real benefit/use-case from the facts, and sound like genuine enthusiasm, not a generic summary. Good: "A genuine time-saver for busy families — you'll wonder how you lived without it." Bad (generic): "A genuinely useful pick — practical, well-made, and worth the price." Same rules apply: honest, grounded in the facts, no invented claims, may reference the Fort Score naturally but don't sound like an internal QA note.`;
 
 function buildUserPrompt(input: ProductInput, deterministic: GeneratedProduct): string {
+  // Deliberately does NOT include deterministic.bullets/benefits — those are template filler
+  // ("Makes {problem} simpler", "Priced to keep a healthy {margin}% margin") wrapped around
+  // the real feature text, not actual product facts. Feeding that to the model as "existing
+  // copy" biased it toward mimicking the same generic boilerplate instead of writing
+  // something distinctly grounded in this specific product. `features` (below) already
+  // contains the real, specific material — that's the actual source to write from.
   const facts = {
     title: deterministic.title,
     category: input.category,
@@ -66,13 +74,11 @@ function buildUserPrompt(input: ProductInput, deterministic: GeneratedProduct): 
     features: input.features,
     price: input.price,
     productType: input.productType,
-    existingBullets: deterministic.bullets,
-    existingBenefits: deterministic.benefits,
     fortScore: deterministic.score,
     fortVerdict: deterministic.verdict,
     margin: deterministic.margin
   };
-  return `Product facts (use only these — do not add anything not implied here):\n${JSON.stringify(facts, null, 2)}`;
+  return `Product facts (use only these — do not add anything not implied here):\n${JSON.stringify(facts, null, 2)}\n\nIMPORTANT: "title" and "features" are the real, specific facts about THIS product — every one of the description, tags, and verdict must clearly reference specific details from them by name (not paraphrased into vague generalities). If your draft would read identically for a different product in the same category, rewrite it to be more specific to this exact product.`;
 }
 
 // Calls OpenAI directly via fetch rather than adding the SDK as a dependency — matches this
@@ -177,6 +183,8 @@ function sanitizeAiCopy(parsed: unknown): AiCopyOverrides | null {
 const FACTS_SYSTEM_PROMPT = `You are an ecommerce copywriter for Fort Crazypants, a practical, family-friendly product review brand.
 
 Rewrite the given product's "problem it solves", "features", "category", and "audience" into clean, well-written, honest copy. Use ONLY the facts given to you — do not invent specifications, materials, certifications, ages, dimensions, safety claims, or features not implied by the existing text. This is a rewrite/polish of existing facts, not new research.
+
+Stay specific to THIS product's existing text — do not smooth it out into generic category boilerplate that could describe any similar product ("practical and easy to use," "a must-have for any home"). If the existing features text names a specific mechanism, material, or use case, that specific detail must survive the rewrite.
 
 "category" is a practical e-commerce product category (e.g. "Kitchen Gadgets", "Home Organization") — keep it concise and accurate, not creative marketing copy; only change it if the existing one is vague or generic and a more specific, still-accurate category is clearly implied by the product name/features.
 
