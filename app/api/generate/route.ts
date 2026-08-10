@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateProduct } from "@/lib/generator";
 import { formatApiError } from "@/lib/apiError";
-import { applyAiCopy, generateAICopy, isAiCopyEnabled } from "@/lib/aiCopywriter";
+import { applyAiCopy, generateAICopy, generateAIProductFacts, isAiCopyEnabled } from "@/lib/aiCopywriter";
 
 const schema = z.object({
   url: z.string().default(""), name: z.string().min(2), cost: z.coerce.number().min(0), price: z.coerce.number().positive(),
@@ -25,12 +25,18 @@ const schema = z.object({
 export async function POST(req: Request) {
   try {
     const input = schema.parse(await req.json());
-    const deterministic = generateProduct(input);
 
-    if (!isAiCopyEnabled()) return NextResponse.json({ ...deterministic, aiCopyUsed: false });
+    if (!isAiCopyEnabled()) return NextResponse.json({ ...generateProduct(input), aiCopyUsed: false });
 
-    const overrides = await generateAICopy(input, deterministic);
-    return NextResponse.json({ ...applyAiCopy(deterministic, overrides), aiCopyUsed: Boolean(overrides) });
+    // Polish problem/features BEFORE generation — they seed a large amount of deterministic
+    // copy (bullets, video scripts, social captions), so this has to happen first to keep
+    // everything downstream consistent (see lib/aiCopywriter.ts generateAIProductFacts).
+    const facts = await generateAIProductFacts(input);
+    const workingInput = facts ? { ...input, ...facts } : input;
+    const deterministic = generateProduct(workingInput);
+
+    const overrides = await generateAICopy(workingInput, deterministic);
+    return NextResponse.json({ ...applyAiCopy(deterministic, overrides), aiCopyUsed: Boolean(facts || overrides) });
   } catch (error) {
     return NextResponse.json({ error: formatApiError(error, "Invalid product data") }, { status: 400 });
   }

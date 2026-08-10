@@ -9,6 +9,12 @@ export type AiCopyOverrides = {
   tags?: string[];
   collections?: CuratedCollection[];
   imagePrompts?: Partial<Record<ImagePromptKey, string>>;
+  fcpVerdict?: string;
+};
+
+export type AiProductFacts = {
+  problem?: string;
+  features?: string;
 };
 
 const IMAGE_PROMPT_KEYS: ImagePromptKey[] = [
@@ -41,10 +47,13 @@ Respond with ONLY a single JSON object, no markdown fences, no commentary, match
     "websiteThumbnail": "rewritten prompt for a small product grid thumbnail photo",
     "holiday": "rewritten prompt for a festive holiday-themed version of the photo",
     "family": "rewritten prompt for a family/group lifestyle photo using the product"
-  }
+  },
+  "fcpVerdict": "one short, punchy, customer-facing sentence — see below"
 }
 
-Each image prompt should be one detailed sentence describing composition, lighting, and setting appropriate to that format, grounded in the actual product's real title and features — not generic. Keep the same photorealistic, professional-product-photography intent as the facts imply.`;
+Each image prompt should be one detailed sentence describing composition, lighting, and setting appropriate to that format, grounded in the actual product's real title and features — not generic. Keep the same photorealistic, professional-product-photography intent as the facts imply.
+
+Also include a top-level "fcpVerdict" field: one short, punchy, customer-facing sentence (not HTML) — a standalone Fort Crazypants recommendation blurb shown near the buy button, e.g. "A genuinely useful pick for road-trip families — practical, well-made, and worth the price." Same rules apply: honest, grounded in the facts, no invented claims, may reference the Fort Score naturally but don't sound like an internal QA note.`;
 
 function buildUserPrompt(input: ProductInput, deterministic: GeneratedProduct): string {
   const facts = {
@@ -156,7 +165,92 @@ function sanitizeAiCopy(parsed: unknown): AiCopyOverrides | null {
     if (Object.keys(imagePrompts).length) overrides.imagePrompts = imagePrompts;
   }
 
+  if (typeof p.fcpVerdict === "string" && p.fcpVerdict.trim().length > 10) {
+    overrides.fcpVerdict = p.fcpVerdict.trim().replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ");
+  }
+
   return Object.keys(overrides).length ? overrides : null;
+}
+
+const FACTS_SYSTEM_PROMPT = `You are an ecommerce copywriter for Fort Crazypants, a practical, family-friendly product review brand.
+
+Rewrite the given product's "problem it solves" and "features" into clean, well-written, honest copy. Use ONLY the facts given to you — do not invent specifications, materials, certifications, ages, dimensions, safety claims, or features not implied by the existing text. This is a rewrite/polish of existing facts, not new research.
+
+Respond with ONLY a single JSON object, no markdown fences, no commentary:
+{
+  "problem": "one clear, honest sentence describing the everyday problem this solves for the target audience, grounded in the existing problem/title/category text",
+  "features": "a clean, comma-separated list of the product's real standout features, grounded in the existing features text — rewritten for clarity, not invented"
+}`;
+
+function buildFactsUserPrompt(input: ProductInput): string {
+  const facts = {
+    name: input.name,
+    category: input.category,
+    audience: input.audience,
+    existingProblem: input.problem,
+    existingFeatures: input.features
+  };
+  return `Product facts (use only these — do not add anything not implied here):\n${JSON.stringify(facts, null, 2)}`;
+}
+
+// Runs BEFORE generateProduct() — problem/features seed a large amount of deterministic copy
+// (bullets, video scripts, social captions all interpolate these strings at generation time),
+// so rewriting them after the fact (like descriptionHtml/tags) would leave that other copy
+// referencing stale wording. Polishing them first keeps everything downstream consistent.
+export async function generateAIProductFacts(input: ProductInput): Promise<AiProductFacts | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    let response: Response;
+    try {
+      response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          response_format: { type: "json_object" },
+          temperature: 0.6,
+          messages: [
+            { role: "system", content: FACTS_SYSTEM_PROMPT },
+            { role: "user", content: buildFactsUserPrompt(input) }
+          ]
+        })
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      console.error("[ai-copy] facts request failed", response.status, await response.text().catch(() => ""));
+      return null;
+    }
+
+    const data = await response.json();
+    const raw = data?.choices?.[0]?.message?.content;
+    if (typeof raw !== "string") return null;
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const facts: AiProductFacts = {};
+    if (typeof parsed.problem === "string" && parsed.problem.trim().length > 5) {
+      facts.problem = parsed.problem.trim().replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ");
+    }
+    if (typeof parsed.features === "string" && parsed.features.trim().length > 5) {
+      facts.features = parsed.features.trim().replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ");
+    }
+    return Object.keys(facts).length ? facts : null;
+  } catch (error) {
+    console.error("[ai-copy] facts generation failed", error instanceof Error ? error.message : error);
+    return null;
+  }
 }
 
 // Merges AI overrides onto the deterministic result. Anything the AI didn't return (or that
@@ -171,6 +265,7 @@ export function applyAiCopy(product: GeneratedProduct, overrides: AiCopyOverride
     collections: overrides.collections ?? product.collections,
     imagePrompts: overrides.imagePrompts
       ? product.imagePrompts.map(p => overrides.imagePrompts?.[p.key] ? { ...p, prompt: overrides.imagePrompts[p.key]! } : p)
-      : product.imagePrompts
+      : product.imagePrompts,
+    fcpVerdict: overrides.fcpVerdict ?? product.fcpVerdict
   };
 }
