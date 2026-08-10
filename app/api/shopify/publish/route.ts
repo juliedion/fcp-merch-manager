@@ -36,18 +36,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Affiliate products require a valid https:// Affiliate URL." }, { status: 400 });
   }
 
-  // CTA button + disclosure are appended here (not baked into descriptionHtml at generation
-  // time) so a Settings-page disclosure-text edit made after generation is still reflected
-  // in what actually gets published.
-  // Styled inline as a real button (not a plain text link) — this is the actual purchase
-  // path for Amazon Affiliate products, where Shopify's own Buy button is deliberately
-  // disabled (see inventory lock below). Left unstyled, it read as a stray line of text
-  // sitting next to a prominent "Sold Out" button, which looked broken rather than intentional.
-  const buttonColor = typeof product.ctaButtonColor === "string" && /^#[0-9a-f]{3,6}$/i.test(product.ctaButtonColor) ? product.ctaButtonColor : "#1a5f4a";
-  const ctaHtml = product.ctaButtonText
-    ? `<p style="margin-top:20px;">${product.ctaButtonUrl ? `<a href="${product.ctaButtonUrl}" target="_blank" rel="nofollow sponsored noopener" style="display:inline-block;background:${buttonColor};color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;">${product.ctaButtonText}</a>` : product.ctaButtonText}</p>${product.disclosureText ? `<p style="font-size:13px;font-style:italic;color:#666;margin-top:8px;">${product.disclosureText}</p>` : ""}`
-    : "";
-  const descriptionHtml = `${product.descriptionHtml || ""}${ctaHtml}`;
+  // No CTA button is baked into descriptionHtml here — that was a workaround for themes
+  // whose product template couldn't distinguish affiliate products (Shopify's own Buy button
+  // would show "Sold Out" with no working purchase path). Now that the storefront theme
+  // checks custom.is_affiliate_product / custom.affiliate_url / custom.cta_text directly
+  // (see theme/snippets/affiliate-buy-buttons.liquid), the theme is the single source of
+  // truth for the CTA — duplicating it here produced two visible buttons on the live page.
+  // If a theme without that check is ever used, this would need to come back for that case.
+  const descriptionHtml = product.descriptionHtml || "";
   // For Amazon Affiliate products, store the source Amazon URL as a metafield — this is
   // what lets the scheduled price-resync job (see /api/cron/resync-prices) find these
   // products later and know which URL to re-check, since this app has no database of its

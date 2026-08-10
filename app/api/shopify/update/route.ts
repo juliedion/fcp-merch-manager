@@ -38,11 +38,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Affiliate products require a valid https:// Affiliate URL." }, { status: 400 });
   }
 
-  const buttonColor = typeof product.ctaButtonColor === "string" && /^#[0-9a-f]{3,6}$/i.test(product.ctaButtonColor) ? product.ctaButtonColor : "#1a5f4a";
-  const ctaHtml = product.ctaButtonText
-    ? `<p style="margin-top:20px;">${product.ctaButtonUrl ? `<a href="${product.ctaButtonUrl}" target="_blank" rel="nofollow sponsored noopener" style="display:inline-block;background:${buttonColor};color:#fff;font-weight:700;padding:14px 28px;border-radius:8px;text-decoration:none;">${product.ctaButtonText}</a>` : product.ctaButtonText}</p>${product.disclosureText ? `<p style="font-size:13px;font-style:italic;color:#666;margin-top:8px;">${product.disclosureText}</p>` : ""}`
-    : "";
-  const descriptionHtml = `${product.descriptionHtml || ""}${ctaHtml}`;
+  // No CTA button baked into descriptionHtml — the storefront theme reads
+  // custom.is_affiliate_product / custom.affiliate_url / custom.cta_text directly (see
+  // theme/snippets/affiliate-buy-buttons.liquid). See app/api/shopify/publish/route.ts for
+  // the full reasoning behind removing this.
+  const descriptionHtml = product.descriptionHtml || "";
 
   const updateMutation = `mutation productUpdate($input: ProductInput!) { productUpdate(input: $input) { product { id title } userErrors { field message } } }`;
   const updateVariables = { input: { id, title: product.title, descriptionHtml, tags: product.tags } };
