@@ -1,4 +1,5 @@
 import { buildMerchandising, buildPricingEngine, recommendProduct, scoreProduct } from "./generator";
+import { ProductInput } from "./types";
 
 export type ScrapedProduct = {
   title: string | null;
@@ -125,10 +126,13 @@ function extractAmazonHiResImages(html: string): string[] {
 // Amazon's og:description is also just "Amazon" — the real product description lives in
 // the "About this item" feature-bullet list further down the page.
 function extractAmazonFeatureBullets(html: string): string | null {
+  // Capture up to 10 bullets (Amazon's "About this item" list is usually 5-8) rather than 5 —
+  // this is the richest source of real product specifics available, and the AI copywriter
+  // needs the full list to write something genuinely specific rather than generic.
   const bullets = Array.from(html.matchAll(/<span class="a-list-item">\s*([^<]+?)\s*<\/span>/g))
     .map(m => decodeEntities(m[1]))
     .filter(t => t.length > 5)
-    .slice(0, 5);
+    .slice(0, 10);
   return bullets.length ? bullets.join(". ") : null;
 }
 
@@ -203,12 +207,7 @@ const DEFAULT_TAXONOMY = { category: "General Merchandise", audience: "busy hous
 export type InferredField = "name" | "price" | "cost" | "category" | "audience" | "problem" | "features" | "shippingDays" | "competition" | "demoFactor";
 
 export type InferenceResult = {
-  input: {
-    url: string; name: string; cost: number; price: number; category: string; audience: string;
-    problem: string; features: string; shippingDays: number; competition: "low" | "medium" | "high"; demoFactor: number;
-    productType: "amazon_affiliate" | "dropshipping" | "wholesale" | "private_label"; amazonUrl: string; affiliateUrl: string;
-    isAffiliateProduct: boolean; merchant: string; affiliateNetwork: string; vendor: string; compareAtPrice: number; fcpVerdict: string;
-  };
+  input: ProductInput;
   scrapedFields: InferredField[];
   estimatedFields: InferredField[];
 };
@@ -379,7 +378,8 @@ export function inferProductInput(scraped: ScrapedProduct, url: string): Inferen
       affiliateNetwork: detected.network,
       vendor: detected.isAffiliate ? detected.merchant : "Fort Crazypants",
       compareAtPrice: 0,
-      fcpVerdict: ""
+      fcpVerdict: "",
+      sourceDescription: scraped.description || ""
     },
     scrapedFields,
     estimatedFields

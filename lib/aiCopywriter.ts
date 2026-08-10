@@ -76,9 +76,13 @@ function buildUserPrompt(input: ProductInput, deterministic: GeneratedProduct): 
     productType: input.productType,
     fortScore: deterministic.score,
     fortVerdict: deterministic.verdict,
-    margin: deterministic.margin
+    margin: deterministic.margin,
+    // The full, minimally-processed scraped retailer description (e.g. Amazon's "About this
+    // item" bullets) — the richest real source available. When present, this supersedes
+    // "features" as the primary material to mine specific details from.
+    sourceDescription: input.sourceDescription || null
   };
-  return `Product facts (use only these — do not add anything not implied here):\n${JSON.stringify(facts, null, 2)}\n\nIMPORTANT: "title" and "features" are the real, specific facts about THIS product — every one of the description, tags, and verdict must clearly reference specific details from them by name (not paraphrased into vague generalities). If your draft would read identically for a different product in the same category, rewrite it to be more specific to this exact product.`;
+  return `Product facts (use only these — do not add anything not implied here):\n${JSON.stringify(facts, null, 2)}\n\nIMPORTANT: if "sourceDescription" is present, it is the actual retailer product description/listing content — treat it as your primary source and mine it for specific real details (materials, mechanisms, exact use cases, named parts, quantities) to write the description, tags, and verdict around. Otherwise use "title" and "features". Every one of the description, tags, and verdict must clearly reference specific details by name (not paraphrased into vague generalities). If your draft would read identically for a different product in the same category, rewrite it to be more specific to this exact product.`;
 }
 
 // Calls OpenAI directly via fetch rather than adding the SDK as a dependency — matches this
@@ -202,9 +206,10 @@ function buildFactsUserPrompt(input: ProductInput): string {
     category: input.category,
     audience: input.audience,
     existingProblem: input.problem,
-    existingFeatures: input.features
+    existingFeatures: input.features,
+    sourceDescription: input.sourceDescription || null
   };
-  return `Product facts (use only these — do not add anything not implied here):\n${JSON.stringify(facts, null, 2)}`;
+  return `Product facts (use only these — do not add anything not implied here):\n${JSON.stringify(facts, null, 2)}\n\nIf "sourceDescription" is present, it's the actual retailer listing content — use it as the primary source for "features" (it contains far more real detail than "existingFeatures", which is already a lossy summary) and for grounding "problem".`;
 }
 
 // Runs BEFORE generateProduct() — problem/features seed a large amount of deterministic copy

@@ -5,7 +5,7 @@ import { AFFILIATE_BUTTON_LABELS, CHECKLIST_ITEMS, PRODUCT_TYPE_LABELS, emptyChe
 import type { ResearchSummary } from "@/lib/scrape";
 import { getProductSettings } from "@/lib/productSettings";
 
-const empty: ProductInput = { url:"", name:"", cost:0, price:0, category:"", audience:"", problem:"", features:"", shippingDays:7, competition:"medium", demoFactor:6, productType:"dropshipping", amazonUrl:"", affiliateUrl:"", isAffiliateProduct:false, merchant:"", affiliateNetwork:"", vendor:"Fort Crazypants", compareAtPrice:0, fcpVerdict:"" };
+const empty: ProductInput = { url:"", name:"", cost:0, price:0, category:"", audience:"", problem:"", features:"", shippingDays:7, competition:"medium", demoFactor:6, productType:"dropshipping", amazonUrl:"", affiliateUrl:"", isAffiliateProduct:false, merchant:"", affiliateNetwork:"", vendor:"Fort Crazypants", compareAtPrice:0, fcpVerdict:"", sourceDescription:"" };
 const AFFILIATE_MERCHANT_OPTIONS = Object.keys(AFFILIATE_BUTTON_LABELS);
 const FIELD_LABELS: Record<string,string> = { name:"Product name", price:"Price", cost:"Your cost", category:"Category", audience:"Audience", problem:"Problem it solves", features:"Features", shippingDays:"Shipping days", competition:"Competition", demoFactor:"Demo factor" };
 const PRODUCT_TYPES: ProductType[] = ["amazon_affiliate", "dropshipping", "wholesale", "private_label"];

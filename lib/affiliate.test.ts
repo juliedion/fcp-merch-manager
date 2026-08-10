@@ -9,7 +9,7 @@ const baseInput: ProductInput = {
   problem: "clutter", features: "durable", shippingDays: 7, competition: "medium", demoFactor: 6,
   productType: "dropshipping", amazonUrl: "", affiliateUrl: "",
   isAffiliateProduct: false, merchant: "", affiliateNetwork: "", vendor: "Fort Crazypants",
-  compareAtPrice: 0, fcpVerdict: ""
+  compareAtPrice: 0, fcpVerdict: "", sourceDescription: ""
 };
 
 describe("buildCtaAndDisclosure", () => {

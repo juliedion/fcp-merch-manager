@@ -16,7 +16,8 @@ const schema = z.object({
   // compatibility with any existing client/localStorage payload that predates this field.
   isAffiliateProduct: z.coerce.boolean().optional(),
   merchant: z.string().default(""), affiliateNetwork: z.string().default(""),
-  vendor: z.string().default("Fort Crazypants"), compareAtPrice: z.coerce.number().min(0).default(0), fcpVerdict: z.string().default("")
+  vendor: z.string().default("Fort Crazypants"), compareAtPrice: z.coerce.number().min(0).default(0), fcpVerdict: z.string().default(""),
+  sourceDescription: z.string().default("")
 }).transform(v => ({ ...v, isAffiliateProduct: v.isAffiliateProduct ?? v.productType === "amazon_affiliate" }))
   .refine(v => !v.isAffiliateProduct || /^https:\/\//i.test(v.affiliateUrl || v.amazonUrl || ""), {
     message: "Affiliate products require a valid https:// Affiliate URL.", path: ["affiliateUrl"]

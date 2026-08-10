@@ -68,6 +68,12 @@ export type ProductInput = {
   vendor: string; // Shopify vendor/brand field — defaults to "Fort Crazypants" for non-affiliate products
   compareAtPrice: number; // 0 = unset/not shown
   fcpVerdict: string; // free-text, user-editable marketing blurb (distinct from the auto score-derived `verdict`)
+  // Full, minimally-processed scraped product description (e.g. Amazon's "About this item"
+  // bullets) — kept separate from `features` (a short, further-truncated summary used by the
+  // deterministic generator/UI) so the AI copywriter has the richest available real source
+  // material to write from, without changing existing `features` behavior. Empty when the
+  // product was entered manually or scraping found nothing.
+  sourceDescription: string;
 };
 
 export type ChecklistKey =
