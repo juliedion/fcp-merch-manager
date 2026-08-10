@@ -13,10 +13,10 @@ const baseInput: ProductInput = {
 };
 
 describe("buildCtaAndDisclosure", () => {
-  // Test case 1: legacy Amazon Affiliate behavior preserved exactly.
-  it("keeps the exact legacy Amazon Affiliate CTA/disclosure when productType is amazon_affiliate", () => {
+  // Test case 1: Amazon Affiliate CTA/disclosure.
+  it("uses 'Buy on Amazon' and the FTC-worded disclosure when productType is amazon_affiliate", () => {
     const result = buildCtaAndDisclosure({ ...baseInput, productType: "amazon_affiliate", amazonUrl: "https://amazon.com/dp/123", isAffiliateProduct: true, merchant: "Amazon" });
-    expect(result.ctaButtonText).toBe("Check Today's Price on Amazon");
+    expect(result.ctaButtonText).toBe("Buy on Amazon");
     expect(result.ctaButtonUrl).toBe("https://amazon.com/dp/123");
     expect(result.disclosureText).toBe(AMAZON_ASSOCIATE_DISCLOSURE);
   });
@@ -49,12 +49,10 @@ describe("buildCtaAndDisclosure", () => {
     expect(result.ctaButtonText).toBe("View Product");
   });
 
-  // Test case 6: every merchant in the mapping table produces its documented label — except
-  // Amazon, which keeps its exact legacy CTA wording ("Check Today's Price on Amazon")
-  // instead of the mapping table's "Buy on Amazon", to avoid changing already-published copy.
+  // Test case 6: every merchant in the mapping table produces its documented label.
   it("maps every documented merchant to its exact CTA label", () => {
     const cases: [string, string][] = [
-      ["Amazon", "Check Today's Price on Amazon"], ["Walmart", "Buy at Walmart"], ["Target", "Buy at Target"],
+      ["Amazon", "Buy on Amazon"], ["Walmart", "Buy at Walmart"], ["Target", "Buy at Target"],
       ["Mavely", "View Deal"], ["Impact", "Shop Now"], ["CJ", "Shop Now"], ["ShareASale", "Shop Now"],
       ["Awin", "Shop Now"], ["Rakuten", "Shop Now"], ["TikTok Shop", "Shop on TikTok"]
     ];

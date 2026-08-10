@@ -62,7 +62,7 @@ merchant, click tracking fires, keyboard focus is visible.
    `?tag=...` parameter verbatim (this app never strips tracking params — see
    `lib/affiliate.test.ts`'s tracking-param-preservation tests).
 4. Click **Generate**. In the output area, confirm:
-   - The CTA preview shows "Check Today's Price on Amazon" (exact legacy wording, unchanged).
+   - The CTA preview shows "Buy on Amazon".
    - The disclosure text below it reads "As an Amazon Associate, I earn from qualifying
      purchases." (exact FTC-required wording).
    - A merchant badge "Available at Amazon" appears above the CTA.
@@ -77,7 +77,7 @@ merchant, click tracking fires, keyboard focus is visible.
    - `affiliateMetafieldsSet: true` (new — confirms the six `custom.*` metafields were written).
 7. In the Shopify Admin, open the new product > Metafields, and confirm `custom.*` values
    match what you entered (is_affiliate_product = true, affiliate_url = your tagged URL,
-   merchant = Amazon, cta_text = "Check Today's Price on Amazon", fcp_verdict = your blurb).
+   merchant = Amazon, cta_text = "Buy on Amazon", fcp_verdict = your blurb).
 8. Once the theme files (step 2 above) are pasted into your live theme, view the product's
    live storefront page and walk through the full manual QA checklist in step 3.
 

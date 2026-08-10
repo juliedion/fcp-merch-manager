@@ -37,8 +37,8 @@ export function detectCuratedCollections(text: string): CuratedCollection[] {
 // links out to its merchant and carries a disclosure. isAffiliateProduct defaults to
 // (productType === "amazon_affiliate") wherever ProductInput objects are constructed, so
 // existing Amazon Affiliate products behave identically to before this change — same CTA
-// text ("Check Today's Price on Amazon"), same URL fallback (affiliateUrl || amazonUrl),
-// same exact FTC-required disclosure wording. New non-Amazon affiliate products (Walmart,
+// text ("Buy on Amazon"), same URL fallback (affiliateUrl || amazonUrl), same exact
+// FTC-required disclosure wording. New non-Amazon affiliate products (Walmart,
 // Target, Mavely, etc.) get a merchant-suggested CTA label (still user-overridable via
 // ctaButtonText on the generated product) and the generic affiliate disclosure — Amazon
 // specifically always keeps the FTC wording even if isAffiliateProduct was set independently
@@ -53,12 +53,8 @@ export function buildCtaAndDisclosure(input: ProductInput): { ctaButtonText: str
   const isAmazon = merchant.toLowerCase() === "amazon" || input.productType === "amazon_affiliate";
   const url = input.affiliateUrl || input.amazonUrl || "";
 
-  // Amazon keeps its exact original wording ("Check Today's Price on Amazon") even though
-  // AFFILIATE_BUTTON_LABELS.Amazon documents a different suggested label ("Buy on Amazon")
-  // for brand-new non-legacy Amazon affiliate flows — this preserves already-published
-  // product copy/behavior for every existing Amazon Affiliate product untouched by this change.
   const suggestedCta = isAmazon
-    ? DEFAULT_CTA_TEXT.amazon_affiliate
+    ? DEFAULT_CTA_TEXT.amazon_affiliate // "Buy on Amazon" — kept in sync with AFFILIATE_BUTTON_LABELS.Amazon
     : merchant && AFFILIATE_BUTTON_LABELS[merchant]
     ? AFFILIATE_BUTTON_LABELS[merchant]
     : DEFAULT_AFFILIATE_CTA_TEXT;

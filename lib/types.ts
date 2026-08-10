@@ -10,7 +10,7 @@ export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
 // Default call-to-action text per product type — affiliate links out to Amazon, the
 // others are ordinary Shopify purchase flows (no affiliate disclosure needed for those).
 export const DEFAULT_CTA_TEXT: Record<ProductType, string> = {
-  amazon_affiliate: "Check Today's Price on Amazon",
+  amazon_affiliate: "Buy on Amazon",
   dropshipping: "Add to Cart",
   wholesale: "Add to Cart",
   private_label: "Add to Cart"
