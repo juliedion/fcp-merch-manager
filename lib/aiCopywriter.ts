@@ -20,13 +20,15 @@ const SYSTEM_PROMPT = `You are an ecommerce copywriter for Fort Crazypants, a pr
 
 Write original, concise, honest copy based ONLY on the product facts given to you. Never invent specifications, materials, certifications, ages, dimensions, or safety claims that aren't in the provided facts. Never use fake urgency ("only X left!", "selling fast") or fabricated testimonials/reviews. Avoid unsupported superlatives ("the best", "guaranteed to") unless the facts explicitly support them.
 
-The product facts include a "fortScore" (0-100) and "fortVerdict" (e.g. "Strong test candidate") that Fort Crazypants already computed from margin/demand/competition — these are real, not invented. Always close the description with a short paragraph in this style: "<p><strong>Fort Crazypants verdict:</strong> {one honest sentence using the verdict/score, e.g. \\"This one earned a Fort Score of 82/100 — a strong test candidate for busy families.\\"}</p>" — keep the numeric score and verdict wording, but you may vary the sentence around it.
+FORMATTING RULES (strict): every sentence ends with correct punctuation (period/exclamation/question mark) — no sentence fragments, no missing periods. Any list of 3+ related items (features, benefits, use cases) MUST be an actual <ul><li>...</li></ul> list, never comma/line-separated text inside a <p>. Never output a literal "\\n" newline character anywhere — paragraph breaks are separate <p> tags, not line breaks inside one.
+
+The product facts include a "fortScore" (0-100) and "fortVerdict" — an internal QA label (e.g. "Strong test candidate", "Worth a small test") — that Fort Crazypants already computed from margin/demand/competition; the number is real, not invented. Close the description with a short paragraph written for the CUSTOMER, not as an internal QA note — translate the verdict into a genuine, warm recommendation in plain shopper language, mentioning the Fort Score number naturally but never using internal phrases like "test candidate" verbatim. Good: "<p><strong>Fort Crazypants verdict:</strong> This one's a genuine time-saver for busy families — it earned a Fort Score of 82/100 from us, and we think it's worth adding to your routine.</p>" Bad (too internal-sounding): "<p><strong>Fort Crazypants verdict:</strong> This earned a Fort Score of 82/100 — a strong test candidate.</p>"
 
 The description must open with the exact heading "<h2>Why You'll Love It</h2>" — never the product's title or any other heading text.
 
 Respond with ONLY a single JSON object, no markdown fences, no commentary, matching this exact shape:
 {
-  "descriptionHtml": "string of simple HTML starting with <h2>Why You'll Love It</h2> exactly, then <p>/<ul><li> tags — a well-written, benefit-focused product description, 2-4 short paragraphs plus a bullet list, ending with the Fort Crazypants verdict paragraph described above",
+  "descriptionHtml": "string of simple HTML starting with <h2>Why You'll Love It</h2> exactly, then <p>/<ul><li> tags per the formatting rules above — a well-written, benefit-focused product description, 2-4 short paragraphs plus a bullet list, ending with the customer-facing Fort Crazypants verdict paragraph described above",
   "tags": ["5 to 8 short, relevant, specific product tags — no generic filler tags"],
   "collections": ["choose 1-3 from this fixed list, only ones that genuinely fit: ${CURATED_COLLECTIONS.join(", ")}"],
   "imagePrompts": {
@@ -124,7 +126,12 @@ function sanitizeAiCopy(parsed: unknown): AiCopyOverrides | null {
     // alone isn't reliable enough to guarantee exact text, and this heading is a fixed brand
     // element, not something that should vary per product.
     const withFixedHeading = p.descriptionHtml.trim().replace(/^\s*<h2>.*?<\/h2>/i, "<h2>Why You'll Love It</h2>");
-    overrides.descriptionHtml = /^\s*<h2>/i.test(withFixedHeading) ? withFixedHeading : `<h2>Why You'll Love It</h2>${withFixedHeading}`;
+    const withHeading = /^\s*<h2>/i.test(withFixedHeading) ? withFixedHeading : `<h2>Why You'll Love It</h2>${withFixedHeading}`;
+    // Collapse any stray raw newlines the model emitted despite the formatting rules — a
+    // literal "\n" inside HTML renders as a missing bullet/broken paragraph rather than an
+    // actual line break, and shows up as an ugly visible break in this app's raw-source
+    // preview. Prompting alone isn't reliable enough to guarantee this never happens.
+    overrides.descriptionHtml = withHeading.replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ").trim();
   }
 
   if (Array.isArray(p.tags)) {
