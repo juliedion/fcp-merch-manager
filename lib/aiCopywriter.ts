@@ -15,6 +15,8 @@ export type AiCopyOverrides = {
 export type AiProductFacts = {
   problem?: string;
   features?: string;
+  category?: string;
+  audience?: string;
 };
 
 const IMAGE_PROMPT_KEYS: ImagePromptKey[] = [
@@ -174,12 +176,16 @@ function sanitizeAiCopy(parsed: unknown): AiCopyOverrides | null {
 
 const FACTS_SYSTEM_PROMPT = `You are an ecommerce copywriter for Fort Crazypants, a practical, family-friendly product review brand.
 
-Rewrite the given product's "problem it solves" and "features" into clean, well-written, honest copy. Use ONLY the facts given to you — do not invent specifications, materials, certifications, ages, dimensions, safety claims, or features not implied by the existing text. This is a rewrite/polish of existing facts, not new research.
+Rewrite the given product's "problem it solves", "features", "category", and "audience" into clean, well-written, honest copy. Use ONLY the facts given to you — do not invent specifications, materials, certifications, ages, dimensions, safety claims, or features not implied by the existing text. This is a rewrite/polish of existing facts, not new research.
+
+"category" is a practical e-commerce product category (e.g. "Kitchen Gadgets", "Home Organization") — keep it concise and accurate, not creative marketing copy; only change it if the existing one is vague or generic and a more specific, still-accurate category is clearly implied by the product name/features.
 
 Respond with ONLY a single JSON object, no markdown fences, no commentary:
 {
   "problem": "one clear, honest sentence describing the everyday problem this solves for the target audience, grounded in the existing problem/title/category text",
-  "features": "a clean, comma-separated list of the product's real standout features, grounded in the existing features text — rewritten for clarity, not invented"
+  "features": "a clean, comma-separated list of the product's real standout features, grounded in the existing features text — rewritten for clarity, not invented",
+  "category": "a concise, accurate e-commerce product category",
+  "audience": "a clear, specific description of who this product is for, grounded in the existing audience text"
 }`;
 
 function buildFactsUserPrompt(input: ProductInput): string {
@@ -245,6 +251,12 @@ export async function generateAIProductFacts(input: ProductInput): Promise<AiPro
     }
     if (typeof parsed.features === "string" && parsed.features.trim().length > 5) {
       facts.features = parsed.features.trim().replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ");
+    }
+    if (typeof parsed.category === "string" && parsed.category.trim().length > 2) {
+      facts.category = parsed.category.trim().replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ");
+    }
+    if (typeof parsed.audience === "string" && parsed.audience.trim().length > 2) {
+      facts.audience = parsed.audience.trim().replace(/[\r\n]+/g, " ").replace(/\s{2,}/g, " ");
     }
     return Object.keys(facts).length ? facts : null;
   } catch (error) {
