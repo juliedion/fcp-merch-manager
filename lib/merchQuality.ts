@@ -68,6 +68,46 @@ function uniqueRankedImages(urls: string[]): string[] {
   return cleaned.sort((a, b) => imageScore(b) - imageScore(a)).slice(0, 12);
 }
 
+function isAmazonUrl(url: string): boolean {
+  try { return /(^|\.)amazon\.[a-z.]+$/i.test(new URL(url).hostname); } catch { return false; }
+}
+
+// Amazon product pages contain many unrelated hiRes/large images for sponsored products,
+// recommendations and page modules. The selected ASIN's actual gallery is the colorImages
+// "initial" array inside ImageBlockATF. Restrict extraction to that array only.
+function extractAmazonSelectedGallery(html: string): string[] {
+  const marker = /['"]colorImages['"]\s*:\s*\{\s*['"]initial['"]\s*:\s*\[/i.exec(html);
+  if (!marker || marker.index == null) return [];
+  const start = marker.index + marker[0].length;
+  let depth = 1;
+  let inString = false;
+  let escaped = false;
+  let end = -1;
+  for (let i = start; i < html.length; i++) {
+    const ch = html[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "[") depth++;
+    else if (ch === "]") {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end < 0) return [];
+  const gallery = html.slice(start, end);
+  const hiRes = Array.from(gallery.matchAll(/"hiRes"\s*:\s*"(https:[^"]+)"/g))
+    .map(m => m[1].replace(/\\u002F/g, "/").replace(/\\\//g, "/"));
+  if (hiRes.length) return Array.from(new Set(hiRes)).slice(0, 12);
+  const large = Array.from(gallery.matchAll(/"large"\s*:\s*"(https:[^"]+)"/g))
+    .map(m => m[1].replace(/\\u002F/g, "/").replace(/\\\//g, "/"));
+  return Array.from(new Set(large)).slice(0, 12);
+}
+
 export async function enrichScrapedProduct(url: string, base: ScrapedProduct & { blocked?: boolean }): Promise<ScrapedProduct & { blocked?: boolean }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
@@ -85,24 +125,19 @@ export async function enrichScrapedProduct(url: string, base: ScrapedProduct & {
     const products = jsonLdProducts(html);
     const product = products.find(p => p?.name) || products[0];
 
-    const imageCandidates: string[] = [];
-    if (product?.image) imageCandidates.push(...normalizeImageUrl(product.image));
-
-    // Amazon exposes the real gallery in several embedded JSON shapes. Prefer these over
-    // og:image, which can be an Amazon/Fresh/site-level social card rather than the product.
-    imageCandidates.push(...Array.from(html.matchAll(/"hiRes"\s*:\s*"(https:[^"]+)"/g)).map(m => m[1].replace(/\\u002F/g, "/")));
-    imageCandidates.push(...Array.from(html.matchAll(/"large"\s*:\s*"(https:[^"]+)"/g)).map(m => m[1].replace(/\\u002F/g, "/")));
-    imageCandidates.push(...Array.from(html.matchAll(/data-old-hires=["']([^"']+)["']/gi)).map(m => decode(m[1])));
-    imageCandidates.push(...Array.from(html.matchAll(/data-a-dynamic-image=["']([^"']+)["']/gi)).flatMap(m => {
-      try { return Object.keys(JSON.parse(decode(m[1]))); } catch { return []; }
-    }));
-
-    const ogImages = Array.from(html.matchAll(/<meta[^>]+(?:property|name)=["']og:image(?::secure_url)?["'][^>]*content=["']([^"']+)["']/gi)).map(m => decode(m[1]));
-    imageCandidates.push(...ogImages);
-
-    const ranked = uniqueRankedImages(imageCandidates);
-    const baseRanked = uniqueRankedImages(base.images || []);
-    const images = ranked.length ? uniqueRankedImages([...ranked, ...baseRanked]) : baseRanked;
+    let images: string[];
+    if (isAmazonUrl(response.url || url) || isAmazonUrl(url)) {
+      const gallery = extractAmazonSelectedGallery(html);
+      // Important: when the selected Amazon gallery is present, NEVER merge base/og/json-ld
+      // images back in. Those are exactly where unrelated sponsored/recommended images enter.
+      images = gallery.length ? gallery : uniqueRankedImages(base.images || []);
+    } else {
+      const imageCandidates: string[] = [];
+      if (product?.image) imageCandidates.push(...normalizeImageUrl(product.image));
+      const ogImages = Array.from(html.matchAll(/<meta[^>]+(?:property|name)=["']og:image(?::secure_url)?["'][^>]*content=["']([^"']+)["']/gi)).map(m => decode(m[1]));
+      imageCandidates.push(...ogImages);
+      images = uniqueRankedImages([...imageCandidates, ...(base.images || [])]);
+    }
 
     const structuredTitle = typeof product?.name === "string" ? stripHtml(product.name) : "";
     const structuredDescription = typeof product?.description === "string" ? stripHtml(product.description) : "";
