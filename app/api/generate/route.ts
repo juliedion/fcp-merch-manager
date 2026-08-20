@@ -3,6 +3,7 @@ import { z } from "zod";
 import { generateProduct } from "@/lib/generator";
 import { formatApiError } from "@/lib/apiError";
 import { applyAiCopy, generateAICopy, generateAIProductFacts, isAiCopyEnabled } from "@/lib/aiCopywriter";
+import { polishGeneratedProduct } from "@/lib/merchQuality";
 
 const schema = z.object({
   url: z.string().default(""), name: z.string().min(2), cost: z.coerce.number().min(0), price: z.coerce.number().positive(),
@@ -11,9 +12,6 @@ const schema = z.object({
   competition: z.enum(["low", "medium", "high"]).default("medium"), demoFactor: z.coerce.number().min(1).max(10).default(7),
   productType: z.enum(["amazon_affiliate", "dropshipping", "wholesale", "private_label"]).default("dropshipping"),
   amazonUrl: z.string().default(""), affiliateUrl: z.string().default(""),
-  // Generic affiliate-product fields (see lib/types.ts). isAffiliateProduct defaults to
-  // (productType === "amazon_affiliate") when the caller doesn't send it, for backward
-  // compatibility with any existing client/localStorage payload that predates this field.
   isAffiliateProduct: z.coerce.boolean().optional(),
   merchant: z.string().default(""), affiliateNetwork: z.string().default(""),
   vendor: z.string().default("Fort Crazypants"), compareAtPrice: z.coerce.number().min(0).default(0), fcpVerdict: z.string().default(""),
@@ -27,17 +25,23 @@ export async function POST(req: Request) {
   try {
     const input = schema.parse(await req.json());
 
-    if (!isAiCopyEnabled()) return NextResponse.json({ ...generateProduct(input), aiCopyUsed: false });
+    if (!isAiCopyEnabled()) {
+      const generated = generateProduct(input);
+      return NextResponse.json({ ...polishGeneratedProduct(generated, input), aiCopyUsed: false });
+    }
 
-    // Polish problem/features BEFORE generation — they seed a large amount of deterministic
-    // copy (bullets, video scripts, social captions), so this has to happen first to keep
-    // everything downstream consistent (see lib/aiCopywriter.ts generateAIProductFacts).
     const facts = await generateAIProductFacts(input);
     const workingInput = facts ? { ...input, ...facts } : input;
     const deterministic = generateProduct(workingInput);
-
     const overrides = await generateAICopy(workingInput, deterministic);
-    return NextResponse.json({ ...applyAiCopy(deterministic, overrides), aiCopyUsed: Boolean(facts || overrides) });
+    const withAi = applyAiCopy(deterministic, overrides);
+
+    // Final quality pass keeps Description as prose only and makes Features, Benefits,
+    // and Specifications distinct instead of repeating the same facts in every section.
+    return NextResponse.json({
+      ...polishGeneratedProduct(withAi, workingInput),
+      aiCopyUsed: Boolean(facts || overrides)
+    });
   } catch (error) {
     return NextResponse.json({ error: formatApiError(error, "Invalid product data") }, { status: 400 });
   }
