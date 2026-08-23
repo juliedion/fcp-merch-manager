@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generateProduct } from "@/lib/generator";
 import { formatApiError } from "@/lib/apiError";
-import { applyAiCopy, generateAICopy, generateAIProductFacts, isAiCopyEnabled } from "@/lib/aiCopywriter";
 import { polishGeneratedProduct } from "@/lib/merchQuality";
 import { rewriteProductPageCopy } from "@/lib/productPageAI";
 
 const schema = z.object({
   url: z.string().default(""), name: z.string().min(2), cost: z.coerce.number().min(0), price: z.coerce.number().positive(),
-  category: z.string().default("Home & Lifestyle"), audience: z.string().default("busy families"), problem: z.string().default(""),
+  category: z.string().default("Home & Lifestyle"), audience: z.string().default(""), problem: z.string().default(""),
   features: z.string().default(""), shippingDays: z.coerce.number().min(0).default(7),
   competition: z.enum(["low", "medium", "high"]).default("medium"), demoFactor: z.coerce.number().min(1).max(10).default(7),
   productType: z.enum(["amazon_affiliate", "dropshipping", "wholesale", "private_label"]).default("dropshipping"),
@@ -26,20 +25,22 @@ export async function POST(req: Request) {
   try {
     const input = schema.parse(await req.json());
 
-    if (!isAiCopyEnabled()) {
-      const generated = polishGeneratedProduct(generateProduct(input), input);
-      const pageCopy = await rewriteProductPageCopy(generated, input);
-      return NextResponse.json({ ...pageCopy, aiCopyUsed: false });
-    }
+    // IMPORTANT: customer-facing copy must never be seeded from legacy inferred fields such as
+    // problem/features/audience. Those fields were the source of cross-product contamination
+    // (for example a kids smartwatch inheriting engraving-tool copy). The deterministic generator
+    // is now used only as a structural shell. Every shopper-facing field is rebuilt afterward
+    // from the current retailer title + sourceDescription only.
+    const structuralInput = {
+      ...input,
+      problem: "",
+      features: "",
+      audience: ""
+    };
 
-    const facts = await generateAIProductFacts(input);
-    const workingInput = facts ? { ...input, ...facts } : input;
-    const deterministic = generateProduct(workingInput);
-    const overrides = await generateAICopy(workingInput, deterministic);
-    const polished = polishGeneratedProduct(applyAiCopy(deterministic, overrides), workingInput);
-    const pageCopy = await rewriteProductPageCopy(polished, workingInput);
+    const structural = polishGeneratedProduct(generateProduct(structuralInput), structuralInput);
+    const sourceTruth = await rewriteProductPageCopy(structural, input);
 
-    return NextResponse.json({ ...pageCopy, aiCopyUsed: Boolean(facts || overrides) });
+    return NextResponse.json({ ...sourceTruth, aiCopyUsed: Boolean(process.env.OPENAI_API_KEY) });
   } catch (error) {
     return NextResponse.json({ error: formatApiError(error, "Invalid product data") }, { status: 400 });
   }
