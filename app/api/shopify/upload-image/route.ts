@@ -15,7 +15,9 @@ async function getAccessToken(domain: string): Promise<string> {
 }
 
 function dataUrlToBlob(dataUrl: string) {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+  // Use [\s\S] instead of the ES2018-only `s` (dotAll) regex flag so this builds
+  // with the project's current TypeScript target on Vercel.
+  const match = dataUrl.match(/^data:([^;]+);base64,([\s\S]+)$/);
   if (!match) throw new Error("Expected a base64 image data URL.");
   const bytes = Buffer.from(match[2], "base64");
   return { mimeType: match[1], blob: new Blob([bytes], { type: match[1] }) };
