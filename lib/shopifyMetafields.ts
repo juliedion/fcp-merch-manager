@@ -1,7 +1,6 @@
-// Affiliate-product metafield support. Additive to the existing, unrelated
-// `fort_crazypants.source_url` metafield used by the price-resync cron (see
-// app/api/shopify/publish/route.ts) — everything here lives under the `custom` namespace
-// only, and never touches metafields this app doesn't own.
+// Affiliate-product metafield support plus storefront merchandising copy.
+// The existing fort_crazypants.source_url metafield remains separate and is still used by
+// the price-resync cron. Everything here lives under custom.* only.
 
 export type AffiliateMetafieldSource = {
   isAffiliateProduct?: boolean;
@@ -10,6 +9,8 @@ export type AffiliateMetafieldSource = {
   merchant?: string | null;
   ctaButtonText?: string | null;
   fcpVerdict?: string | null;
+  benefits?: string[] | null;
+  bullets?: string[] | null;
 };
 
 export type ShopifyMetafieldInput = {
@@ -20,25 +21,38 @@ export type ShopifyMetafieldInput = {
   value: string;
 };
 
-// Builds the `custom.*` metafield payload for a product. Only emits fields that have a
-// real, non-empty value — Shopify's metafieldsSet rejects/ignores empty strings for some
-// types anyway, and there's no reason to write empty affiliate fields onto a regular,
-// non-affiliate Shopify product. is_affiliate_product itself is always written (true or
-// false) so the storefront Liquid can reliably branch on its presence.
+function cleanLines(values?: string[] | null, max = 6) {
+  return (values || [])
+    .map(v => String(v || "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, max);
+}
+
+// fcp_verdict is retained as a legacy storage key because products/storefronts may already
+// have the definition. It now stores the customer-facing 3-sentence "Why You'll Love It"
+// copy when no explicit legacy verdict was supplied. The storefront no longer labels it as
+// a verdict. purchase_bullets stores the distinct benefit-led feature list shown below
+// Product Details.
 export function buildAffiliateMetafieldsPayload(ownerId: string, product: AffiliateMetafieldSource): ShopifyMetafieldInput[] {
   const isAffiliate = Boolean(product.isAffiliateProduct);
+  const whyYoullLoveIt = (product.fcpVerdict || cleanLines(product.benefits, 3).join(" ")).trim();
+  const purchaseBullets = cleanLines(product.bullets, 6).join("\n");
+
   const candidates: ShopifyMetafieldInput[] = [
     { ownerId, namespace: "custom", key: "is_affiliate_product", type: "boolean", value: String(isAffiliate) },
     { ownerId, namespace: "custom", key: "affiliate_url", type: "url", value: product.affiliateUrl ?? "" },
     { ownerId, namespace: "custom", key: "affiliate_network", type: "single_line_text_field", value: product.affiliateNetwork ?? "" },
     { ownerId, namespace: "custom", key: "merchant", type: "single_line_text_field", value: product.merchant ?? "" },
     { ownerId, namespace: "custom", key: "cta_text", type: "single_line_text_field", value: product.ctaButtonText ?? "" },
-    { ownerId, namespace: "custom", key: "fcp_verdict", type: "multi_line_text_field", value: product.fcpVerdict ?? "" }
+    { ownerId, namespace: "custom", key: "fcp_verdict", type: "multi_line_text_field", value: whyYoullLoveIt },
+    { ownerId, namespace: "custom", key: "purchase_bullets", type: "multi_line_text_field", value: purchaseBullets }
   ];
 
   return candidates.filter(f => {
     if (f.key === "is_affiliate_product") return true;
-    if (!isAffiliate) return false; // don't write blank affiliate fields onto a non-affiliate product
+    // Product-page copy belongs to the product regardless of purchase mode.
+    if (f.key === "fcp_verdict" || f.key === "purchase_bullets") return f.value !== "";
+    if (!isAffiliate) return false;
     return f.value !== undefined && f.value !== null && f.value !== "";
   });
 }
@@ -49,13 +63,12 @@ const METAFIELD_DEFINITIONS: { key: string; name: string; type: string; descript
   { key: "affiliate_network", name: "Affiliate Network", type: "single_line_text_field", description: "e.g. Amazon Associates, Impact, CJ, ShareASale, Awin, Rakuten, Mavely." },
   { key: "merchant", name: "Merchant", type: "single_line_text_field", description: "e.g. Amazon, Walmart, Target, Mavely." },
   { key: "cta_text", name: "CTA Text", type: "single_line_text_field", description: "Button label shown in place of Add to Cart, e.g. \"Buy on Amazon\"." },
-  { key: "fcp_verdict", name: "Fort Crazypants Verdict", type: "multi_line_text_field", description: "Free-text marketing blurb shown near the affiliate CTA." }
+  { key: "fcp_verdict", name: "Why You'll Love It", type: "multi_line_text_field", description: "Three-sentence customer-facing summary of the product's strongest benefits." },
+  { key: "purchase_bullets", name: "Purchase Bullets", type: "multi_line_text_field", description: "Benefit-led product feature bullets shown on the storefront product page." }
 ];
 
 export type ShopifyGraphQLClient = (query: string, variables: Record<string, unknown>) => Promise<{ data?: unknown; errors?: unknown }>;
 
-// Idempotent: checks metafieldDefinitions for the `custom` namespace on Product first, and
-// only creates the ones that don't already exist. Safe to call on every deploy / setup run.
 export async function ensureAffiliateMetafieldDefinitions(graphql: ShopifyGraphQLClient): Promise<{ created: string[]; skipped: string[]; errors: { key: string; error: unknown }[] }> {
   const created: string[] = [];
   const skipped: string[] = [];
