@@ -1,3 +1,3 @@
 import AppShell from "@/components/AppShell";
-import ProductStudio from "@/components/ProductStudio";
-export default function Home(){return <AppShell><ProductStudio/></AppShell>}
+import MerchManagerV2 from "@/components/MerchManagerV2";
+export default function Home(){return <AppShell><MerchManagerV2/></AppShell>}
