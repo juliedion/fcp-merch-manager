@@ -3,6 +3,7 @@ import { z } from "zod";
 import { buildResearchSummary, inferProductInput, scrapeProduct } from "@/lib/scrape";
 import { enrichScrapedProduct } from "@/lib/merchQuality";
 import { enrichAmazonProduct } from "@/lib/amazonProduct";
+import { enforceSourceTruth } from "@/lib/sourceTruth";
 import { formatApiError } from "@/lib/apiError";
 
 const schema = z.object({ url: z.string().url() });
@@ -12,7 +13,8 @@ export async function POST(req: Request) {
     const { url } = schema.parse(await req.json());
     const scrapedBase = await scrapeProduct(url);
     const enriched = await enrichScrapedProduct(url, scrapedBase);
-    const scraped = await enrichAmazonProduct(url, enriched);
+    const amazonEnriched = await enrichAmazonProduct(url, enriched);
+    const scraped = await enforceSourceTruth(url, amazonEnriched);
     const inference = inferProductInput(scraped, url);
     const research = buildResearchSummary(scraped, inference);
     return NextResponse.json({ scraped, research, ...inference });
