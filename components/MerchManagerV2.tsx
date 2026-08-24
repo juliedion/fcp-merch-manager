@@ -51,6 +51,8 @@ export default function MerchManagerV2() {
   const [ugcBusy, setUgcBusy] = useState(false);
   const [customImageBusy, setCustomImageBusy] = useState(false);
   const [customImagePrompt, setCustomImagePrompt] = useState("");
+  const [customReferenceImage, setCustomReferenceImage] = useState("");
+  const [customReferenceName, setCustomReferenceName] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [socialCaption, setSocialCaption] = useState("");
   const [pinterestTitle, setPinterestTitle] = useState("");
@@ -65,6 +67,16 @@ export default function MerchManagerV2() {
 
   function toggleCollection(name: string) { setSelectedCollections(current => current.includes(name) ? current.filter(x => x !== name) : [...current, name]); }
   function addCustomCollection() { const name = customCollection.trim(); if (!name) return; setSelectedCollections(current => current.includes(name) ? current : [...current, name]); setCustomCollection(""); }
+
+  function handleReferenceUpload(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setStatus("Please upload an image file for the reference."); return; }
+    if (file.size > 12 * 1024 * 1024) { setStatus("Reference image must be 12 MB or smaller."); return; }
+    const reader = new FileReader();
+    reader.onload = () => { setCustomReferenceImage(String(reader.result || "")); setCustomReferenceName(file.name); setStatus("Reference image added. AI will use it together with the original product photo."); };
+    reader.onerror = () => setStatus("Could not read that reference image.");
+    reader.readAsDataURL(file);
+  }
 
   async function generateListing(nextInput: ProductInput, images = sourceImages, autoUgc = false) {
     if (!nextInput.name.trim()) { setStatus("The product title could not be read from the listing."); return; }
@@ -82,7 +94,7 @@ export default function MerchManagerV2() {
 
   async function researchProduct(target: string) {
     const trimmed = target.trim(); if (!/^https?:\/\//i.test(trimmed)) return;
-    setResearching(true); setResult(null); setUgcImages([]); setSelectedImage(0); setSelectedCollections([]); setStatus("Reading the exact product listing…");
+    setResearching(true); setResult(null); setUgcImages([]); setSelectedImage(0); setSelectedCollections([]); setCustomReferenceImage(""); setCustomReferenceName(""); setStatus("Reading the exact product listing…");
     try {
       const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: trimmed }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "Could not read that product page.");
@@ -114,11 +126,12 @@ export default function MerchManagerV2() {
   async function generateCustomImage() {
     const request = customImagePrompt.trim();
     if (!result || !request || !sourceImages.length || customImageBusy) return;
-    setCustomImageBusy(true); setStatus("Generating your custom product image from the original listing photo…");
+    setCustomImageBusy(true); setStatus(customReferenceImage ? "Generating your custom image using the product photo and uploaded reference…" : "Generating your custom product image from the original listing photo…");
     try {
       const sourceImageUrl = sourceImages[0];
-      const prompt = `${request}\n\nIMPORTANT: Use the attached/source product photo as the exact product reference. Keep the product's shape, colors, controls, branding, proportions and recognizable details faithful to the original. Product: ${result.title}. Product facts: ${htmlText(result.descriptionHtml).slice(0, 900)}. Create a polished, realistic UGC/lifestyle image unless the request specifies another style.`;
-      const r = await fetch("/api/generate-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, sourceImageUrl, aspectRatio: "4:5", negativePrompt: "wrong product, altered product, fake controls, invented accessories, incorrect branding, misspelled text, watermark, distorted hands" }) });
+      const referenceInstruction = customReferenceImage ? " Use the additional uploaded reference image for the requested person, setting, composition, pose, mood, styling or visual direction while keeping the actual product faithful to the product-reference image." : "";
+      const prompt = `${request}\n\nIMPORTANT: The product-reference image is the source of truth for the product. Keep its shape, colors, controls, branding, proportions and recognizable details faithful to the original.${referenceInstruction} Product: ${result.title}. Product facts: ${htmlText(result.descriptionHtml).slice(0, 900)}. Create a polished, realistic UGC/lifestyle image unless the request specifies another style.`;
+      const r = await fetch("/api/generate-image", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, sourceImageUrl, referenceImageData: customReferenceImage || undefined, aspectRatio: "4:5", negativePrompt: "wrong product, altered product, fake controls, invented accessories, incorrect branding, misspelled text, watermark, distorted hands" }) });
       const d = await r.json(); if (!r.ok) throw new Error(d.error || "Custom image generation failed.");
       const hosted = await hostGeneratedImage(d.imageUrl, ugcImages.length); setUgcImages(prev => [hosted, ...prev]); setSelectedImage(0); setStatus("Your custom AI product image is ready and added to the UGC gallery.");
     } catch (e) { setStatus(e instanceof Error ? e.message : "Custom image generation failed."); } finally { setCustomImageBusy(false); }
@@ -157,8 +170,18 @@ export default function MerchManagerV2() {
 
       <section className={styles.card}>
         <div className={styles.sectionHead}><div><div className={styles.kicker}>AI UGC IMAGE GALLERY</div><h2>Creator-style product images</h2></div><div className={styles.ugcControls}><select value={ugcCount} onChange={e => setUgcCount(Number(e.target.value))}>{[5,6,7,8,9,10].map(n => <option key={n} value={n}>{n} images</option>)}</select><button className={styles.primary} onClick={() => generateUgcPack()} disabled={ugcBusy}>{ugcBusy ? "Generating…" : `Generate ${ugcCount} UGC images`}</button></div></div>
-        <p className={styles.note}>Each image uses the original listing photography as the visual reference so the product stays recognizable instead of being reinvented by AI.</p>
-        <div style={{margin:"18px 0",padding:"16px",border:"1px solid #d9dedb",borderRadius:"12px",background:"#fafcfb"}}><label className={styles.label}>Ask AI for a specific image</label><textarea rows={4} value={customImagePrompt} onChange={e => setCustomImagePrompt(e.target.value)} placeholder="Example: Show a mom using this product in a bright kitchen while her kids do homework in the background. Make it look like a candid iPhone photo for Instagram." style={{width:"100%",marginTop:"8px",padding:"12px",border:"1px solid #cfd7d3",borderRadius:"10px",font:"inherit",resize:"vertical"}}/><div style={{display:"flex",justifyContent:"space-between",gap:"12px",alignItems:"center",flexWrap:"wrap",marginTop:"10px"}}><span className={styles.note}>The original product photo will automatically be used as the visual reference.</span><button className={styles.primary} onClick={generateCustomImage} disabled={customImageBusy || !customImagePrompt.trim() || !sourceImages.length}>{customImageBusy ? "Generating custom image…" : "Generate this image"}</button></div></div>
+        <p className={styles.note}>Each image uses the original listing photography as the product reference so the product stays recognizable instead of being reinvented by AI.</p>
+        <div style={{margin:"18px 0",padding:"16px",border:"1px solid #d9dedb",borderRadius:"12px",background:"#fafcfb"}}>
+          <label className={styles.label}>Ask AI for a specific image</label>
+          <textarea rows={4} value={customImagePrompt} onChange={e => setCustomImagePrompt(e.target.value)} placeholder="Example: Show a mom using this product in a bright kitchen while her kids do homework in the background. Make it look like a candid iPhone photo for Instagram." style={{width:"100%",marginTop:"8px",padding:"12px",border:"1px solid #cfd7d3",borderRadius:"10px",font:"inherit",resize:"vertical"}}/>
+          <div style={{marginTop:"12px",padding:"12px",border:"1px dashed #bfc9c4",borderRadius:"10px",background:"#fff"}}>
+            <div style={{fontWeight:700,marginBottom:"6px"}}>Optional reference image</div>
+            <div className={styles.note}>Upload a person, room, pose, style, composition or other visual reference. AI will use it together with the original product photo.</div>
+            <input type="file" accept="image/*" onChange={e => handleReferenceUpload(e.target.files?.[0])} style={{marginTop:"10px",maxWidth:"100%"}}/>
+            {customReferenceImage && <div style={{display:"flex",alignItems:"center",gap:"12px",marginTop:"12px",flexWrap:"wrap"}}><img src={customReferenceImage} alt="Uploaded AI reference" style={{width:"86px",height:"86px",objectFit:"cover",borderRadius:"10px",border:"1px solid #d9dedb"}}/><div style={{minWidth:0,flex:"1 1 180px"}}><div style={{fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{customReferenceName || "Reference image"}</div><div className={styles.note}>This will guide the scene/style; the original product image remains the product source of truth.</div></div><button type="button" onClick={() => { setCustomReferenceImage(""); setCustomReferenceName(""); }}>Remove</button></div>}
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",gap:"12px",alignItems:"center",flexWrap:"wrap",marginTop:"10px"}}><span className={styles.note}>{customReferenceImage ? "Using original product photo + your uploaded reference." : "The original product photo will automatically be used as the visual reference."}</span><button className={styles.primary} onClick={generateCustomImage} disabled={customImageBusy || !customImagePrompt.trim() || !sourceImages.length}>{customImageBusy ? "Generating custom image…" : "Generate this image"}</button></div>
+        </div>
         <div className={styles.ugcScroller}>{ugcImages.map((src, i) => <button key={`${src}-${i}`} onClick={() => setSelectedImage(i)}><img src={src} alt={`UGC creative ${i + 1}`}/></button>)}</div>
       </section>
 
