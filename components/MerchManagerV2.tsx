@@ -253,11 +253,11 @@ export default function MerchManagerV2() {
             <div className={styles.productEyebrow}>{(result.category || "FORT CRAZYPANTS FIND").toUpperCase()}</div>
             <h1>{result.title}</h1>
             <div className={styles.price}>${Number(result.price).toFixed(2)}</div>
+            {result.ctaButtonText && <a className={styles.buyButton} href={result.ctaButtonUrl || "#"} target="_blank" rel="nofollow sponsored noopener">{result.ctaButtonText} →</a>}
+            {result.disclosureText && <p className={styles.disclosure}>{result.disclosureText}</p>}
             <section className={styles.productDetails}><h2>Product Details</h2><p>{productDetails}</p></section>
             {result.bullets?.length > 0 && <ul className={styles.featureBullets}>{result.bullets.slice(0, 6).map((x, i) => <li key={i}>{x.replace(/[.;,:\s]+$/, "") + "."}</li>)}</ul>}
             <section className={styles.why}><h2>Why You&apos;ll Love It</h2><p>{whyLove}</p></section>
-            {result.ctaButtonText && <a className={styles.buyButton} href={result.ctaButtonUrl || "#"} target="_blank" rel="nofollow sponsored noopener">{result.ctaButtonText} →</a>}
-            {result.disclosureText && <p className={styles.disclosure}>{result.disclosureText}</p>}
           </div>
         </div>
       </section>
