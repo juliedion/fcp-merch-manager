@@ -11,6 +11,34 @@ const emptyInput: ProductInput = {
   compareAtPrice: 0, fcpVerdict: "", sourceDescription: ""
 };
 
+const COLLECTION_OPTIONS = [
+  "Best Sellers",
+  "Back to School",
+  "End of Summer Blowout",
+  "Fall Finds",
+  "Halloween",
+  "Home, Kitchen, Decor & More",
+  "Gift-worthy Finds",
+  "Boredom Busters",
+  "Hot Mama Finds",
+  "Home Office & Workday Wins",
+  "Sports Parent & Sideline Finds",
+  "Baby, Kids & Littles",
+  "Teens & Tweens",
+  "Travel Finds",
+  "Craft & Hobby",
+  "Personal Care",
+  "Garden & Outdoor",
+  "Organization Finds",
+  "Hot Romance & Couples",
+  "Man Caves, Garages & Grills",
+  "Fitness & Sports",
+  "Hot Toys",
+  "Apparel & Accessories",
+  "Electronics, Cameras & More",
+  "Dads & Dudes"
+];
+
 const UGC_PROMPTS = [
   "Casual iPhone-style UGC photo of a real person naturally using this exact product at home. Authentic creator content, imperfect everyday composition, natural daylight, believable environment, no ad text.",
   "Realistic UGC unboxing photo of this exact product held in two hands near its packaging on a kitchen or bathroom counter. Candid smartphone photography, natural light, relatable home setting.",
@@ -51,11 +79,24 @@ export default function MerchManagerV2() {
   const [socialCaption, setSocialCaption] = useState("");
   const [pinterestTitle, setPinterestTitle] = useState("");
   const [pinterestDescription, setPinterestDescription] = useState("");
+  const [selectedCollections, setSelectedCollections] = useState<string[]>([]);
+  const [customCollection, setCustomCollection] = useState("");
 
   const allImages = useMemo(() => [...ugcImages, ...sourceImages].filter((x, i, a) => x && a.indexOf(x) === i), [ugcImages, sourceImages]);
   const previewImage = allImages[selectedImage] || sourceImages[0] || "";
   const productDetails = result ? htmlText(result.descriptionHtml) : input.sourceDescription;
   const whyLove = result ? firstThreeLines(result) : "";
+
+  function toggleCollection(name: string) {
+    setSelectedCollections(current => current.includes(name) ? current.filter(x => x !== name) : [...current, name]);
+  }
+
+  function addCustomCollection() {
+    const name = customCollection.trim();
+    if (!name) return;
+    setSelectedCollections(current => current.includes(name) ? current : [...current, name]);
+    setCustomCollection("");
+  }
 
   async function generateListing(nextInput: ProductInput, images = sourceImages, autoUgc = false) {
     if (!nextInput.name.trim()) { setStatus("The product title could not be read from the listing."); return; }
@@ -67,6 +108,7 @@ export default function MerchManagerV2() {
       if (!r.ok) throw new Error(d.error || "Could not generate the listing.");
       const generated = d as GeneratedProduct;
       setResult(generated);
+      setSelectedCollections(Array.from(new Set(generated.collections || [])));
       setSocialCaption(generated.instagramCaption || generated.facebookPost || generated.metaDescription || "");
       setPinterestTitle(generated.pinterestTitle || generated.title);
       setPinterestDescription(generated.pinterestDescription || generated.metaDescription || "");
@@ -83,7 +125,7 @@ export default function MerchManagerV2() {
   async function researchProduct(target: string) {
     const trimmed = target.trim();
     if (!/^https?:\/\//i.test(trimmed)) return;
-    setResearching(true); setResult(null); setUgcImages([]); setSelectedImage(0); setStatus("Reading the exact product listing…");
+    setResearching(true); setResult(null); setUgcImages([]); setSelectedImage(0); setSelectedCollections([]); setStatus("Reading the exact product listing…");
     try {
       const r = await fetch("/api/scrape", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url: trimmed }) });
       const d = await r.json();
@@ -143,10 +185,11 @@ export default function MerchManagerV2() {
     try {
       const hostedUgc = ugcImages.filter(x => /^https?:\/\//i.test(x));
       const images = [...hostedUgc, ...sourceImages].filter((x, i, a) => /^https?:\/\//i.test(x) && a.indexOf(x) === i).slice(0, 10);
-      const r = await fetch("/api/shopify/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...result, fcpVerdict: "", images }) });
+      const r = await fetch("/api/shopify/publish", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...result, collections: selectedCollections, fcpVerdict: "", images }) });
       const d = await r.json();
       if (!r.ok) throw new Error(typeof d.error === "string" ? d.error : JSON.stringify(d.error));
-      setStatus(`Draft created in Shopify: ${d.title}${d.imagesAttached ? ` — ${d.imagesAttached} images attached` : ""}.`);
+      const collectionNote = d.collectionsAdded?.length ? ` — added to ${d.collectionsAdded.join(", ")}` : selectedCollections.length ? " — no matching Shopify collections were found" : "";
+      setStatus(`Draft created in Shopify: ${d.title}${d.imagesAttached ? ` — ${d.imagesAttached} images attached` : ""}${collectionNote}.`);
     } catch (e) { setStatus(e instanceof Error ? e.message : "Publish failed."); }
     finally { setPublishing(false); }
   }
@@ -189,6 +232,16 @@ export default function MerchManagerV2() {
     </section>}
 
     {result && <>
+      <section className={styles.card}>
+        <div className={styles.sectionHead}><div><div className={styles.kicker}>SHOPIFY COLLECTIONS</div><h2>Where should this product appear?</h2></div></div>
+        <p className={styles.note}>Choose every collection this product belongs in. These selections override the AI suggestions when you publish the Shopify draft.</p>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:"10px",marginTop:"16px"}}>
+          {COLLECTION_OPTIONS.map(name => <label key={name} style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 12px",border:"1px solid #d9dedb",borderRadius:"10px",background:selectedCollections.includes(name)?"#eef8f5":"#fff",cursor:"pointer"}}><input type="checkbox" checked={selectedCollections.includes(name)} onChange={() => toggleCollection(name)}/><span>{name}</span></label>)}
+        </div>
+        <div style={{display:"flex",gap:"10px",marginTop:"16px",flexWrap:"wrap"}}><input style={{flex:"1 1 260px"}} value={customCollection} onChange={e => setCustomCollection(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCustomCollection(); } }} placeholder="Add another Shopify collection"/><button onClick={addCustomCollection}>Add collection</button></div>
+        {selectedCollections.length > 0 && <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginTop:"14px"}}>{selectedCollections.map(name => <button key={name} onClick={() => toggleCollection(name)} title="Remove collection" style={{border:"1px solid #cfe2dc",borderRadius:"999px",padding:"7px 11px",background:"#f2faf7",cursor:"pointer"}}>{name} ×</button>)}</div>}
+      </section>
+
       <section className={styles.card}>
         <div className={styles.sectionHead}><div><div className={styles.kicker}>EXACT STOREFRONT PREVIEW</div><h2>Product page</h2></div><button className={styles.primary} onClick={publish} disabled={publishing}>{publishing ? "Publishing…" : "Publish draft"}</button></div>
         <div className={styles.productPage}>
