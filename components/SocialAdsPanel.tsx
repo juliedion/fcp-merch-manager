@@ -4,12 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 
 function clean(s: string) { return s.replace(/\s+/g, " ").trim(); }
 function copy(text: string) { if (text) void navigator.clipboard.writeText(text); }
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default function SocialAdsPanel() {
   const [title, setTitle] = useState("");
   const [details, setDetails] = useState("");
   const [merchant, setMerchant] = useState("retailer");
   const [image, setImage] = useState("");
+  const [videoBusy, setVideoBusy] = useState(false);
+  const [videoStatus, setVideoStatus] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
 
   useEffect(() => {
     const scan = () => {
@@ -45,26 +49,48 @@ export default function SocialAdsPanel() {
       `18–22s — CTA: Product hero shot + “See it on ${merchant}” / “Tap to shop.”`
     ];
     const voice = `${hook} I found ${title}, and ${fact.charAt(0).toLowerCase()}${fact.slice(1)}. Watch this. [demo] Okay, I get the hype. If you want to check it out, tap through to ${merchant}.`;
-    return { fb, ig, tt, scenes, voice };
+    const videoPrompt = `Vertical 9:16 authentic UGC creator video for ${title}. Start from the supplied exact product image and keep the product visually faithful: same shape, color, proportions, controls, branding and materials. Handheld smartphone aesthetic, natural home lighting, subtle realistic camera movement, creator picks up and naturally demonstrates the product. Do not add fake product features, logos, text or accessories. Social ad style for Facebook Reels, Instagram Reels and TikTok.`;
+    return { fb, ig, tt, scenes, voice, videoPrompt };
   }, [title, details, merchant]);
 
+  async function generateReel() {
+    if (!ads || !image || videoBusy) return;
+    setVideoBusy(true); setVideoUrl(""); setVideoStatus("Starting vertical UGC reel…");
+    try {
+      const start = await fetch("/api/generate-video", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ promptText:ads.videoPrompt, promptImage:image, duration:5 }) });
+      const started = await start.json();
+      if (!start.ok) throw new Error(started.error || "Could not start reel generation.");
+      for (let i=0;i<50;i++) {
+        await sleep(3000);
+        const r = await fetch(`/api/generate-video/${encodeURIComponent(started.taskId)}`, { cache:"no-store" });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Could not check reel status.");
+        if (d.status === "SUCCEEDED" && d.videoUrl) { setVideoUrl(d.videoUrl); setVideoStatus("UGC reel clip ready for Facebook, Instagram and TikTok."); return; }
+        if (d.status === "FAILED") throw new Error(d.error || "Reel generation failed.");
+        setVideoStatus(`Generating reel… ${d.status === "RUNNING" ? "rendering" : "queued"}`);
+      }
+      throw new Error("Reel generation is taking longer than expected. Try again in a moment.");
+    } catch(e) { setVideoStatus(e instanceof Error ? e.message : "Reel generation failed."); }
+    finally { setVideoBusy(false); }
+  }
+
   if (!ads) return null;
-  const card: React.CSSProperties = { background:"#fff", border:"1px solid #e2dfd6", borderRadius:20, padding:24, margin:"0 0 22px", color:"#123b39" };
+  const card: React.CSSProperties = { background:"#fff", border:"1px solid #e2dfd6", borderRadius:20, padding:24, margin:"0 0 22px", color:"#123b39", minWidth:0 };
   const grid: React.CSSProperties = { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:16 };
   const box: React.CSSProperties = { border:"1px solid #dfe4e1", borderRadius:14, padding:16, background:"#fafcfb", minWidth:0 };
-  const button: React.CSSProperties = { border:0, borderRadius:10, padding:"10px 14px", background:"#073c3a", color:"#fff", fontWeight:800, cursor:"pointer", marginTop:10 };
+  const button: React.CSSProperties = { border:0, borderRadius:10, padding:"10px 14px", background:"#073c3a", color:"#fff", fontWeight:800, cursor:"pointer", marginTop:10, minHeight:44 };
 
   return <section style={card}>
     <div style={{fontSize:13,letterSpacing:".14em",fontWeight:900,color:"#1b8d76"}}>SOCIAL ADS</div>
     <h2 style={{fontSize:27,margin:"4px 0 8px"}}>Facebook, Instagram & TikTok ad pack</h2>
-    <p style={{margin:"0 0 18px",color:"#667673",lineHeight:1.5}}>Generated from the current product page. The reel is written for vertical 9:16 UGC creative and can use the AI UGC image gallery as the visual reference.</p>
+    <p style={{margin:"0 0 18px",color:"#667673",lineHeight:1.5}}>Generated from the current product page with a vertical 9:16 UGC reel workflow.</p>
     {image && <img src={image} alt="Selected social ad creative" style={{width:"100%",maxWidth:360,aspectRatio:"4/5",objectFit:"cover",borderRadius:14,border:"1px solid #ddd",marginBottom:18}}/>}
     <div style={grid}>
-      <div style={box}><h3>Facebook / Instagram Ad</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55}}>{ads.fb}</pre><button style={button} onClick={()=>copy(ads.fb)}>Copy Facebook ad</button></div>
-      <div style={box}><h3>Instagram Caption</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55}}>{ads.ig}</pre><button style={button} onClick={()=>copy(ads.ig)}>Copy Instagram ad</button></div>
-      <div style={box}><h3>TikTok Caption</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55}}>{ads.tt}</pre><button style={button} onClick={()=>copy(ads.tt)}>Copy TikTok ad</button></div>
+      <div style={box}><h3>Facebook / Instagram Ad</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.fb}</pre><button style={button} onClick={()=>copy(ads.fb)}>Copy Facebook ad</button></div>
+      <div style={box}><h3>Instagram Caption</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.ig}</pre><button style={button} onClick={()=>copy(ads.ig)}>Copy Instagram ad</button></div>
+      <div style={box}><h3>TikTok Caption</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.tt}</pre><button style={button} onClick={()=>copy(ads.tt)}>Copy TikTok ad</button></div>
     </div>
-    <div style={{...box,marginTop:16}}><h3>9:16 UGC Reel — Facebook / Instagram / TikTok</h3><ol style={{paddingLeft:20,lineHeight:1.6}}>{ads.scenes.map((s,i)=><li key={i}>{s}</li>)}</ol><strong>Voiceover</strong><p style={{lineHeight:1.6}}>{ads.voice}</p><button style={button} onClick={()=>copy(`${ads.scenes.join("\n")}\n\nVOICEOVER:\n${ads.voice}`)}>Copy reel script</button></div>
+    <div style={{...box,marginTop:16}}><h3>9:16 UGC Reel — Facebook / Instagram / TikTok</h3><ol style={{paddingLeft:20,lineHeight:1.6}}>{ads.scenes.map((s,i)=><li key={i}>{s}</li>)}</ol><strong>Voiceover</strong><p style={{lineHeight:1.6}}>{ads.voice}</p><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><button style={button} onClick={()=>copy(`${ads.scenes.join("\n")}\n\nVOICEOVER:\n${ads.voice}`)}>Copy reel script</button><button style={button} onClick={generateReel} disabled={videoBusy || !image}>{videoBusy ? "Generating reel…" : "Generate UGC reel video"}</button></div>{videoStatus && <p style={{fontSize:13,color:"#667673",overflowWrap:"anywhere"}}>{videoStatus}</p>}{videoUrl && <video src={videoUrl} controls playsInline style={{width:"100%",maxWidth:360,aspectRatio:"9/16",objectFit:"cover",borderRadius:14,marginTop:12,background:"#000"}}/>}</div>
     <button style={{...button,width:"100%",marginTop:18,padding:"14px 18px",fontSize:16}} onClick={()=>window.location.reload()}>Finish product & start next one</button>
   </section>;
 }
