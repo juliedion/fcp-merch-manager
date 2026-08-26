@@ -28,29 +28,50 @@ function extractTitle(html: string) {
   return t ? cleanTitle(t) : null;
 }
 function money(value: string | undefined) {
-  if (!value) return null; const n = Number(value.replace(/[$,\s]/g, "")); return Number.isFinite(n) && n > 0 ? n : null;
+  if (!value) return null;
+  const normalized = value.replace(/[^0-9.,]/g, "").replace(/,/g, "");
+  const n = Number(normalized);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 function extractPrice(html: string): number | null {
-  const anchors = ["corePrice_feature_div", "corePriceDisplay_desktop_feature_div", "apex_desktop", "price_inside_buybox"];
+  // Prefer the product's own buy-box/core-price regions so we don't accidentally
+  // capture sponsored products, coupons, list prices, or recommendations.
+  const anchors = [
+    "corePrice_feature_div", "corePriceDisplay_desktop_feature_div",
+    "corePriceDisplay_mobile_feature_div", "apex_desktop", "apex_mobile",
+    "price_inside_buybox", "newAccordionRow_1"
+  ];
   for (const anchor of anchors) {
-    const a = html.indexOf(`id=\"${anchor}\"`), b = html.indexOf(`id='${anchor}'`), i = a >= 0 ? a : b;
-    if (i >= 0) {
-      const block = html.slice(i, i + 18000);
-      const off = block.match(/class=["'][^"']*a-offscreen[^"']*["'][^>]*>\s*\$?([\d,]+(?:\.\d{2})?)/i);
-      const n = money(off?.[1]); if (n) return n;
-      const whole = block.match(/class=["'][^"']*a-price-whole[^"']*["'][^>]*>\s*([\d,]+)/i)?.[1];
-      const frac = block.match(/class=["'][^"']*a-price-fraction[^"']*["'][^>]*>\s*(\d{2})/i)?.[1];
-      if (whole) { const n2 = money(`${whole}.${frac || "00"}`); if (n2) return n2; }
+    const re = new RegExp(`id=["']${anchor}["']`, "i");
+    const match = re.exec(html);
+    if (!match) continue;
+    const block = html.slice(match.index, match.index + 22000);
+    const offscreen = block.match(/class=["'][^"']*a-offscreen[^"']*["'][^>]*>\s*(?:US\$|\$)?\s*([\d,]+(?:\.\d{2})?)/i);
+    const n = money(offscreen?.[1]);
+    if (n) return n;
+    const whole = block.match(/class=["'][^"']*a-price-whole[^"']*["'][^>]*>\s*([\d,]+)/i)?.[1];
+    const frac = block.match(/class=["'][^"']*a-price-fraction[^"']*["'][^>]*>\s*(\d{2})/i)?.[1];
+    if (whole) {
+      const n2 = money(`${whole}.${frac || "00"}`);
+      if (n2) return n2;
     }
   }
+
+  // Amazon experiments with several embedded JSON shapes. These are still tied
+  // to the current product price rather than doing an unsafe generic $XX search.
   const patterns = [
-    /"priceToPay"\s*:\s*\{[\s\S]{0,700}?"priceAmount"\s*:\s*([\d.]+)/i,
-    /"displayPrice"\s*:\s*"\$([\d,]+(?:\.\d{2})?)"/i,
-    /"priceAmount"\s*:\s*([\d.]+)[\s\S]{0,400}?"currencySymbol"\s*:\s*"\$"/i,
-    /id=["']priceblock_(?:ourprice|dealprice|saleprice)["'][^>]*>\s*\$([\d,]+(?:\.\d{2})?)/i,
-    /class=["'][^"']*a-price[^"']*["'][\s\S]{0,800}?class=["'][^"']*a-offscreen[^"']*["'][^>]*>\$([\d,]+(?:\.\d{2})?)/i
+    /"priceToPay"\s*:\s*\{[\s\S]{0,1200}?"priceAmount"\s*:\s*([\d.]+)/i,
+    /"priceToPay"\s*:\s*\{[\s\S]{0,1200}?"displayString"\s*:\s*"(?:US\\?\$|\\?\$)?([\d,]+(?:\.\d{2})?)"/i,
+    /"displayPrice"\s*:\s*"(?:US\\?\$|\\?\$)?([\d,]+(?:\.\d{2})?)"/i,
+    /"priceAmount"\s*:\s*([\d.]+)[\s\S]{0,500}?"currencySymbol"\s*:\s*"\\?\$"/i,
+    /"price"\s*:\s*\{[\s\S]{0,500}?"amount"\s*:\s*([\d.]+)[\s\S]{0,500}?"currencyCode"\s*:\s*"USD"/i,
+    /id=["']priceblock_(?:ourprice|dealprice|saleprice)["'][^>]*>\s*(?:US\$|\$)?\s*([\d,]+(?:\.\d{2})?)/i,
+    /data-a-color=["']price["'][\s\S]{0,1200}?class=["'][^"']*a-offscreen[^"']*["'][^>]*>\s*(?:US\$|\$)?\s*([\d,]+(?:\.\d{2})?)/i
   ];
-  for (const re of patterns) { const n = money(html.match(re)?.[1]); if (n) return n; }
+  for (const re of patterns) {
+    const n = money(html.match(re)?.[1]);
+    if (n) return n;
+  }
   return null;
 }
 function imageUrlsFromGallery(html: string): string[] {
