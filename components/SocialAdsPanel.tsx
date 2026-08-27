@@ -35,21 +35,27 @@ export default function SocialAdsPanel() {
 
   const ads = useMemo(() => {
     if (!title) return null;
-    const fact = details.split(/[.!?]/).map(clean).find(x => x.length > 20) || `A practical find designed to make everyday life easier.`;
-    const hook = `Okay, this is one of those “where has this been?” finds.`;
-    const fb = `${hook}\n\n${title} caught our attention because ${fact.charAt(0).toLowerCase()}${fact.slice(1)}.\n\nIf this solves a problem you deal with all the time, it is absolutely worth a look.\n\nShop it on ${merchant} →`;
-    const ig = `${hook}\n\n${title} ✨\n${fact}\n\nWould you try this?\n\n#FortCrazypants #AmazonFinds #MustHave #FoundIt #SmartFinds`;
-    const tt = `POV: you found the product you didn’t know you needed 👀\n\n${title}\n\n${fact}\n\nTap to check it out on ${merchant}.\n\n#TikTokMadeMeBuyIt #FoundOnTikTok #FortCrazypants #ProductFinds`;
+    const fact = details.split(/[.!?]/).map(clean).find(x => x.length > 20) || `It is one of those smart little finds that makes everyday life easier.`;
+    const benefit = fact.charAt(0).toLowerCase() + fact.slice(1);
+
+    // FOMO here is intentionally curiosity/social-proof driven. Never invent stock levels,
+    // deadlines, sales, popularity counts or price drops that the product data does not prove.
+    const fb = `I almost scrolled past this — and now I get why people keep sharing finds like this. 👀\n\n${title}\n\nThe part that got me? ${fact}\n\nThis is exactly the kind of thing you see once, skip, and then wish you had saved when you actually need it. If ${benefit}, you’re going to want to see this one.\n\nI found it on ${merchant}. Tap through before you forget about it. 👇`;
+
+    const ig = `STOP SCROLLING — this is one of those finds you’ll remember the second you need it. 👀\n\n${title}\n\nWhy it made the save list: ${fact}\n\nI would 100% rather know this exists now than go looking for a solution later. Save this, send it to the person who would immediately want one, or check it out on ${merchant} before you lose the post.\n\n#FortCrazypants #MustHaveFinds #ThingsYouNeed #SmartFinds #FoundIt #AmazonFinds`;
+
+    const tt = `Wait… WHY did nobody show me this sooner? 👀\n\n${title}\n\n${fact}\n\nThis is your sign not to scroll and forget it exists. Save it now because the minute you actually need this, you’ll be trying to remember where you saw it. 😩\n\nFound on ${merchant} — tap to see it.\n\n#TikTokMadeMeBuyIt #ThingsYouNeed #MustHaveFinds #FortCrazypants #FoundOnTikTok`;
+
     const scenes = [
-      `0–2s — HOOK: Close-up of the product. On-screen text: “Wait… why is this actually genius?”`,
-      `2–5s — PROBLEM: Show the everyday frustration this product helps with.`,
-      `5–9s — REVEAL: Creator picks up ${title} and starts using it naturally.`,
-      `9–14s — DEMO: Tight shots of the most useful feature/result. Keep cuts fast and phone-shot, not polished studio footage.`,
-      `14–18s — REACTION: Natural creator reaction. On-screen text: “Okay, I get the hype.”`,
-      `18–22s — CTA: Product hero shot + “See it on ${merchant}” / “Tap to shop.”`
+      `0–2s — PATTERN INTERRUPT: Tight product close-up. On-screen text: “WAIT — why did nobody show me this?”`,
+      `2–5s — FOMO: Show the problem first. On-screen text: “You’re going to remember this the next time this happens…”`,
+      `5–9s — REVEAL: Creator grabs ${title}. On-screen text: “THIS is what I should’ve had.”`,
+      `9–14s — PROOF: Fast, satisfying demo of the real benefit. Let the product/result do the selling.`,
+      `14–18s — REACTION: Creator looks genuinely impressed. On-screen text: “Okay… now I get it.”`,
+      `18–22s — CTA: Product hero shot. On-screen text: “Save this before you forget it 👀” + “See it on ${merchant}.”`
     ];
-    const voice = `${hook} I found ${title}, and ${fact.charAt(0).toLowerCase()}${fact.slice(1)}. Watch this. [demo] Okay, I get the hype. If you want to check it out, tap through to ${merchant}.`;
-    const videoPrompt = `Vertical 9:16 authentic UGC creator video for ${title}. Start from the supplied exact product image and keep the product visually faithful: same shape, color, proportions, controls, branding and materials. Handheld smartphone aesthetic, natural home lighting, subtle realistic camera movement, creator picks up and naturally demonstrates the product. Do not add fake product features, logos, text or accessories. Social ad style for Facebook Reels, Instagram Reels and TikTok.`;
+    const voice = `Wait — if you deal with this, do not scroll yet. I found ${title}, and ${benefit}. This is one of those things you don’t think you need until the exact moment you REALLY need it. Watch this. [demo] Yeah… now I get it. Save this so you can actually find it again, or tap through to see it on ${merchant}.`;
+    const videoPrompt = `Vertical 9:16 authentic high-retention UGC creator video for ${title}. Start from the supplied exact product image and keep the product visually faithful: same shape, color, proportions, controls, branding and materials. Strong first-second pattern interrupt, handheld smartphone aesthetic, natural home lighting, fast social-native cuts, genuine surprised reaction, creator naturally demonstrates the real product benefit. Create urgency through curiosity and fear of missing a useful discovery, not fake scarcity. Do not invent sales, limited stock, deadlines, popularity claims, product features, logos, text or accessories. Social ad style for Facebook Reels, Instagram Reels and TikTok.`;
     return { fb, ig, tt, scenes, voice, videoPrompt };
   }, [title, details, merchant]);
 
@@ -82,15 +88,15 @@ export default function SocialAdsPanel() {
 
   return <section style={card}>
     <div style={{fontSize:13,letterSpacing:".14em",fontWeight:900,color:"#1b8d76"}}>SOCIAL ADS</div>
-    <h2 style={{fontSize:27,margin:"4px 0 8px"}}>Facebook, Instagram & TikTok ad pack</h2>
-    <p style={{margin:"0 0 18px",color:"#667673",lineHeight:1.5}}>Generated from the current product page with a vertical 9:16 UGC reel workflow.</p>
+    <h2 style={{fontSize:27,margin:"4px 0 8px"}}>FOMO-first Facebook, Instagram & TikTok ad pack</h2>
+    <p style={{margin:"0 0 18px",color:"#667673",lineHeight:1.5}}>Built to stop the scroll, create curiosity and make people feel like they’ll regret forgetting the find — without fake scarcity or made-up claims.</p>
     {image && <img src={image} alt="Selected social ad creative" style={{width:"100%",maxWidth:360,aspectRatio:"4/5",objectFit:"cover",borderRadius:14,border:"1px solid #ddd",marginBottom:18}}/>}
     <div style={grid}>
-      <div style={box}><h3>Facebook / Instagram Ad</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.fb}</pre><button style={button} onClick={()=>copy(ads.fb)}>Copy Facebook ad</button></div>
+      <div style={box}><h3>Facebook Ad</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.fb}</pre><button style={button} onClick={()=>copy(ads.fb)}>Copy Facebook ad</button></div>
       <div style={box}><h3>Instagram Caption</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.ig}</pre><button style={button} onClick={()=>copy(ads.ig)}>Copy Instagram ad</button></div>
       <div style={box}><h3>TikTok Caption</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.tt}</pre><button style={button} onClick={()=>copy(ads.tt)}>Copy TikTok ad</button></div>
     </div>
-    <div style={{...box,marginTop:16}}><h3>9:16 UGC Reel — Facebook / Instagram / TikTok</h3><ol style={{paddingLeft:20,lineHeight:1.6}}>{ads.scenes.map((s,i)=><li key={i}>{s}</li>)}</ol><strong>Voiceover</strong><p style={{lineHeight:1.6}}>{ads.voice}</p><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><button style={button} onClick={()=>copy(`${ads.scenes.join("\n")}\n\nVOICEOVER:\n${ads.voice}`)}>Copy reel script</button><button style={button} onClick={generateReel} disabled={videoBusy || !image}>{videoBusy ? "Generating reel…" : "Generate UGC reel video"}</button></div>{videoStatus && <p style={{fontSize:13,color:"#667673",overflowWrap:"anywhere"}}>{videoStatus}</p>}{videoUrl && <video src={videoUrl} controls playsInline style={{width:"100%",maxWidth:360,aspectRatio:"9/16",objectFit:"cover",borderRadius:14,marginTop:12,background:"#000"}}/>}</div>
+    <div style={{...box,marginTop:16}}><h3>9:16 FOMO UGC Reel — Facebook / Instagram / TikTok</h3><ol style={{paddingLeft:20,lineHeight:1.6}}>{ads.scenes.map((s,i)=><li key={i}>{s}</li>)}</ol><strong>Voiceover</strong><p style={{lineHeight:1.6}}>{ads.voice}</p><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><button style={button} onClick={()=>copy(`${ads.scenes.join("\n")}\n\nVOICEOVER:\n${ads.voice}`)}>Copy reel script</button><button style={button} onClick={generateReel} disabled={videoBusy || !image}>{videoBusy ? "Generating reel…" : "Generate UGC reel video"}</button></div>{videoStatus && <p style={{fontSize:13,color:"#667673",overflowWrap:"anywhere"}}>{videoStatus}</p>}{videoUrl && <video src={videoUrl} controls playsInline style={{width:"100%",maxWidth:360,aspectRatio:"9/16",objectFit:"cover",borderRadius:14,marginTop:12,background:"#000"}}/>}</div>
     <button style={{...button,width:"100%",marginTop:18,padding:"14px 18px",fontSize:16}} onClick={()=>window.location.reload()}>Finish product & start next one</button>
   </section>;
 }
