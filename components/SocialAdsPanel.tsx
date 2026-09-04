@@ -13,7 +13,7 @@ export default function SocialAdsPanel() {
   const [image, setImage] = useState("");
   const [videoBusy, setVideoBusy] = useState(false);
   const [videoStatus, setVideoStatus] = useState("");
-  const [videoUrl, setVideoUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");\n  const [facebookBusy, setFacebookBusy] = useState(false);\n  const [facebookStatus, setFacebookStatus] = useState("");
 
   useEffect(() => {
     const scan = () => {
@@ -59,6 +59,26 @@ export default function SocialAdsPanel() {
     return { fb, ig, tt, scenes, voice, videoPrompt };
   }, [title, details, merchant]);
 
+  async function createFacebookDraft() {
+    if (!ads || !image || facebookBusy) return;
+    setFacebookBusy(true); setFacebookStatus("Creating Facebook draft…");
+    try {
+      const r = await fetch("/api/social/post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: "facebook", mediaUrl: image, mediaType: "image", caption: ads.fb, mode: "draft" })
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Could not create Facebook draft.");
+      setFacebookStatus("Draft created. Opening Meta Business Suite so you can edit it.");
+      if (d.editUrl) window.open(d.editUrl, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setFacebookStatus(e instanceof Error ? e.message : "Could not create Facebook draft.");
+    } finally {
+      setFacebookBusy(false);
+    }
+  }
+
   async function generateReel() {
     if (!ads || !image || videoBusy) return;
     setVideoBusy(true); setVideoUrl(""); setVideoStatus("Starting vertical UGC reel…");
@@ -92,7 +112,7 @@ export default function SocialAdsPanel() {
     <p style={{margin:"0 0 18px",color:"#667673",lineHeight:1.5}}>Built to stop the scroll, create curiosity and make people feel like they’ll regret forgetting the find — without fake scarcity or made-up claims.</p>
     {image && <img src={image} alt="Selected social ad creative" style={{width:"100%",maxWidth:360,aspectRatio:"4/5",objectFit:"cover",borderRadius:14,border:"1px solid #ddd",marginBottom:18}}/>}
     <div style={grid}>
-      <div style={box}><h3>Facebook Ad</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.fb}</pre><button style={button} onClick={()=>copy(ads.fb)}>Copy Facebook ad</button></div>
+      <div style={box}><h3>Facebook Ad</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.fb}</pre><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button style={button} onClick={()=>copy(ads.fb)}>Copy Facebook ad</button><button style={button} onClick={createFacebookDraft} disabled={facebookBusy || !image}>{facebookBusy ? "Creating draft…" : "Edit as Facebook draft"}</button></div>{facebookStatus && <p style={{fontSize:13,color:"#667673",lineHeight:1.45}}>{facebookStatus}</p>}</div>
       <div style={box}><h3>Instagram Caption</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.ig}</pre><button style={button} onClick={()=>copy(ads.ig)}>Copy Instagram ad</button></div>
       <div style={box}><h3>TikTok Caption</h3><pre style={{whiteSpace:"pre-wrap",fontFamily:"inherit",lineHeight:1.55,overflowWrap:"anywhere"}}>{ads.tt}</pre><button style={button} onClick={()=>copy(ads.tt)}>Copy TikTok ad</button></div>
     </div>
