@@ -13,7 +13,7 @@ const schema = z.object({
 
 const isPublicUrl = (s: string) => /^https?:\/\//i.test(s);
 
-async function postFacebook(mediaUrl: string, mediaType: "image" | "video", caption: string) {
+async function postFacebook(mediaUrl: string, mediaType: "image" | "video", caption: string, mode: "publish" | "draft" = "publish") {
   const pageId = process.env.META_PAGE_ID;
   const token = process.env.META_PAGE_ACCESS_TOKEN;
   if (!pageId || !token) throw new Error("META_PAGE_ID / META_PAGE_ACCESS_TOKEN are not configured on the server.");
@@ -21,7 +21,7 @@ async function postFacebook(mediaUrl: string, mediaType: "image" | "video", capt
   const endpoint = mediaType === "video" ? `${GRAPH_BASE}/${pageId}/videos` : `${GRAPH_BASE}/${pageId}/photos`;
 
   if (isPublicUrl(mediaUrl)) {
-    const params = new URLSearchParams({ access_token: token, ...(mediaType === "video" ? { file_url: mediaUrl, description: caption } : { url: mediaUrl, caption }) });
+    const params = new URLSearchParams({ access_token: token, published: mode === "draft" ? "false" : "true", ...(mediaType === "video" ? { file_url: mediaUrl, description: caption } : { url: mediaUrl, caption }) });
     const r = await fetch(`${endpoint}?${params.toString()}`, { method: "POST" });
     const data = await r.json();
     if (!r.ok) throw new Error(data?.error?.message || "Facebook post failed.");
@@ -36,7 +36,7 @@ async function postFacebook(mediaUrl: string, mediaType: "image" | "video", capt
   const [, mime, b64] = match;
   const buffer = Buffer.from(b64, "base64");
   const form = new FormData();
-  form.append("access_token", token);
+  form.append("access_token", token);\n  form.append("published", mode === "draft" ? "false" : "true");
   if (mediaType === "video") form.append("description", caption); else form.append("caption", caption);
   form.append("source", new Blob([buffer], { type: mime }), mediaType === "video" ? "video.mp4" : "image.png");
   const r = await fetch(endpoint, { method: "POST", body: form });
